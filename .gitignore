@@ -8,5 +8,4 @@ caption_eval/
 hf_gpt2.py
 og_train.py
 sweep_config.yml
-train.py
 wandb/
