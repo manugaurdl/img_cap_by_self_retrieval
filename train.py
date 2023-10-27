@@ -461,26 +461,26 @@ def train(train_dataset, val_dataset, model, eval_obj, config):
         epoch_train_tgts = []
         train_start = time.time()
 
-        for idx, (prefix, tokens, mask) in enumerate(train_dataloader):
+        for idx, (prefix, targets, mask) in enumerate(train_dataloader):
             step+=1
 
             model.zero_grad()
             optimizer.zero_grad()
-            tokens, mask, prefix = tokens.to(device), mask.to(device), prefix.to(device, dtype=torch.float32)
-            outputs = model(prefix,tokens, mask)
+            targets, mask, prefix = targets.to(device), mask.to(device), prefix.to(device, dtype=torch.float32)
+            outputs = model(prefix,targets, mask)
             # logits corresponding to preds for all caption tokens are taken.
             # i.e from logit of last learnable token to logit of second last caption token.
             logits = outputs.logits[:, train_dataset.prefix_len - 1: -1] 
-            loss = nnf.cross_entropy(logits.reshape(-1, logits.shape[-1]), tokens.to(torch.long).flatten(), ignore_index=0) # (B,T) flattened to (B*T)
+            loss = nnf.cross_entropy(logits.reshape(-1, logits.shape[-1]), targets.to(torch.long).flatten(), ignore_index=0) # (B,T) flattened to (B*T)
 
             # accumulating loss,tgts,preds
             epoch_train_losses.append(loss.item())
-            epoch_train_tgts.append(tokens)
+            epoch_train_tgts.append(targets)
             probs = torch.nn.functional.softmax(logits, dim=-1)
             preds = torch.multinomial(probs.view(-1, probs.shape[-1]), num_samples=1)
-            epoch_train_preds.append(preds.view(batch_size,tokens.shape[-1], -1).squeeze(-1))
+            epoch_train_preds.append(preds.view(batch_size,targets.shape[-1], -1).squeeze(-1))
             
-            loss_meter.update(loss.item(), tokens.shape[0])
+            loss_meter.update(loss.item(), targets.shape[0])
             loss.backward()
             optimizer.step()
             scheduler.step()
