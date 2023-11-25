@@ -4,6 +4,8 @@ from torch import nn
 import numpy as np
 import torch
 from enum import Enum
+import random
+import json
 from tqdm import tqdm, trange
 import climage
 import torch.nn.functional as nnf
@@ -19,11 +21,17 @@ import skimage.io as io
 import PIL.Image
 
 
-# class ClipDataset(Dataset):
+def sample_img(img_reference_list):
+    x = img_reference_list[random.randint(0, len(img_reference_list))]
+    return x['filename'], x['references']
 
 #params:
 use_beam_search = False #@param {type:"boolean"}
-img_path = "/home2/manugaur/COCO_val2014_000000290839.jpg"
+test_data_path = "/ssd_scratch/cvit/manu/clip_cap/annotations/test_filename_references.json"
+with open(test_data_path) as f:
+    img_reference_list = json.load(f) 
+
+img_path, references = sample_img(img_reference_list)
 model_path = "/ssd_scratch/cvit/manu/clip_cap_manu/checkpoints/coco_prefix-009.pt"
 prefix_dim = 1024
 prefix_length = 10

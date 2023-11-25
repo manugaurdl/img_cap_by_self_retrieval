@@ -13,7 +13,7 @@ from torch.utils.data import Dataset, DataLoader
 import pdb
 import time
 
-SAVE = True
+SAVE = False
 
 class CocoDataset(Dataset):
     """
@@ -25,7 +25,7 @@ class CocoDataset(Dataset):
         self.split = split
         self.model = model
         self.transforms = transforms
-        with open(f'/ssd_scratch/cvit/manu/clip_cap/annotations/{self.split}_caption.json', 'r') as f:
+        with open(f'/ssd_scratch/cvit/manu/img_cap_self_retrieval_clip/annotations/{self.split}_caption.json', 'r') as f:
             self.data_list = json.load(f)
         print(f"%0d captions loaded from {self.split} json " % len(self.data_list))
 
@@ -48,7 +48,7 @@ class CocoDataset(Dataset):
             print(f"image for {filename} doesn't exist")
         if self.model == "clip":
             image = io.imread(filename)
-            image = preprocess(Image.fromarray(image)).to(device)
+            image = self.transforms(Image.fromarray(image))
             
         elif self.model =="siglip":
             image = Image.open(filename)
@@ -63,7 +63,7 @@ def main(args):
     batch_size = args.bs
     print(f'split = {args.split}')
     device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
-    out_path = os.path.join(data_dir,f"{args.model}_{split}_emb_2.pkl")
+    out_path = os.path.join(data_dir,f"{args.model}_{args.clip_model_type.replace('/','_')}_{split}_emb.pkl")
 
     all_embeddings = [] # all images clip embeddings stored 
     all_captions = []  # stores data dict for all images. also stores idx for clip_embedding
@@ -83,17 +83,18 @@ def main(args):
         model = model.eval()
         data_config = timm.data.resolve_model_data_config(model)
         transforms = timm.data.create_transform(**data_config, is_training=False)
-
-    dataset = CocoDataset(data_dir, split, args.model,transforms)
+    if args.model=="clip":
+        dataset = CocoDataset(data_dir, split, args.model, preprocess)
+    else:
+        dataset = CocoDataset(data_dir, split, args.model,transforms)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, drop_last=True)
 
     for idx, (captions, images) in tqdm(enumerate(dataloader), total=len(dataloader)):
-        if idx <=374:
-            continue
 
         with torch.no_grad():
             if args.model == "clip":
-                prefix = clip_model.encode_image(image).cpu()
+                import pdb;pdb.set_trace()
+                prefix = clip_model.encode_image(images.to(device)).cpu()
                 
             elif args.model =="siglip":    
                 prefix = model(images)  # output is (batch_size, num_features) shaped tensor
@@ -101,11 +102,11 @@ def main(args):
         all_embeddings.extend(torch.split(prefix, 1, dim=0))
         all_captions.extend(captions)
         if SAVE:
-            if ((idx+1)*args.bs) % 16000 == 0:
+            if ((idx+1)*args.bs) % int(args.bs)*100== 0:
                 with open(out_path, 'wb') as f:
                     pickle.dump({"clip_embedding": torch.cat(all_embeddings, dim=0), "captions": all_captions}, f)
-
         gc.collect()
+
     if SAVE:
         with open(out_path, 'wb') as f:
             pickle.dump({"clip_embedding": torch.cat(all_embeddings, dim=0), "captions": all_captions}, f)
@@ -117,11 +118,11 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', default="siglip", choices=("siglip", "clip"))
-    parser.add_argument('--clip_model_type', default="ViT-B/32", choices=('RN50', 'RN101', 'RN50x4', 'ViT-B/32'))
+    parser.add_argument('--model', default="clip", choices=("siglip", "clip"))
+    parser.add_argument('--clip_model_type', default="ViT-B/32", choices=('RN50', 'RN101', 'RN50x4', 'ViT-B/32', 'ViT-B/16'))
     parser.add_argument('--data_dir', default="/ssd_scratch/cvit/manu/coco/")
-    parser.add_argument('--split', default = 'train',type = str)
-    parser.add_argument('--bs', default = 1024, type = int)
+    parser.add_argument('--split', default = 'val',type = str)
+    parser.add_argument('--bs', default = 64, type = int)
 
     
     args = parser.parse_args()

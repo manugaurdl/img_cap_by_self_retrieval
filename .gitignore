@@ -9,3 +9,4 @@ hf_gpt2.py
 og_train.py
 sweep_config.yml
 wandb/
+config_siglip.yml

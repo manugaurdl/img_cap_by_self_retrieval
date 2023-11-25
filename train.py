@@ -22,6 +22,7 @@ import time
 import evaluate
 
 
+
 def open_pickle(path):
     with open(path, 'rb') as f:
         data = pickle.load(f)
@@ -31,20 +32,11 @@ def dump_pickle(data,path):
     with open(path, 'wb') as f:
         pickle.dump(data,f)
 
-def init_wandb(args):
-
-    config = {
-    "lr": args.lr,
-    "model": "RN50", # pretrained/scratch
-    "num_epochs": args.epochs, # CHANGE
-    "gpu_id": 0,
-    "wandb_run_name": args.wandb_run_name ### FILL YOUR NAME HERE
-    }
-
-    wandb.init(entity = "manugaur", project = "clip_cap_reproduce", config = args)
-    # wandb.run.name = config["wandb_run_name"]
-    wandb.run.name = config["wandb_run_name"]
-
+def save_model(output_dir, model_name, model):
+    torch.save(
+    model.state_dict(),
+    os.path.join(output_dir, f'{model_name}.pt'),
+)
 
 class Summary():
     NONE = 0
@@ -75,7 +67,7 @@ class AverageMeter(object):
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
-        self.val_history.append(val) # maintaining a list of val losses.
+        self.val_history.append(val) # maintaining a list of val losses.        
 
     def __str__(self):
         fmtstr = '{name} {val' + self.fmt + '} ({avg' + self.fmt + '})'
@@ -115,19 +107,19 @@ class CocoDataset(Dataset):
               Mask is of length 50 however. As it has torch.ones(1,10) prepended to captions mask for image prefix embedding. 
     """
     
-    def __init__(self, data_path, prefix_len,norm_prefix, tokenizer = "gpt2"):
+    def __init__(self, data_path, prefix_len,norm_prefix,split, tokenizer):
         self.data = open_pickle(data_path)
         self.clip_embed = self.data['clip_embedding']
         self.meta_data = self.data['captions']
         self.tokenizer = GPT2Tokenizer.from_pretrained(tokenizer)
         self.prefix_len = prefix_len
         self.norm_prefix = norm_prefix
-        self.split = data_path.split("_")[-1][:-4]
-                
+        self.split = split
+
         #dataset needs to be arranged so a given 'idx' --> clip_embed of image, tokenized caption.
         # cannot tokenize everytime. Too expensive.
-
-        self.indexed_dataset_path = f"/ssd_scratch/cvit/manu/clip_cap_manu/siglip_{self.split}_caption_tokens.pkl"
+        
+        self.indexed_dataset_path = os.path.join(data_path.split('/data')[0],f'data/{self.split}_caption_tokens.pkl')
         if os.path.isfile(self.indexed_dataset_path):
             print("loading data.... ")
             self.tokenized_captions, self.max_len_token = open_pickle(self.indexed_dataset_path)
@@ -138,7 +130,11 @@ class CocoDataset(Dataset):
             token_len_list = []
 
             for meta_data in self.meta_data:
-                tokens = torch.tensor(self.tokenizer.encode(meta_data['captions']),dtype=torch.int)
+                
+                if self.split =='val':
+                    tokens = torch.tensor(self.tokenizer.encode(meta_data['caption']),dtype=torch.int)
+                else:
+                    tokens = torch.tensor(self.tokenizer.encode(meta_data),dtype=torch.int)
                 self.tokenized_captions.append(tokens)
                 token_len_list.append(tokens.shape[-1])
             
@@ -152,9 +148,8 @@ class CocoDataset(Dataset):
         # self.caption2clip_idx = [x['clip_embedding'] for x in self.meta_data]
 
     def __len__(self):
-        # return len(self.data['clip_embedding'])
-        return 320
-
+        return len(self.data['clip_embedding'])
+        # return 400
         
     def pad(self, idx):
         tokens = self.tokenized_captions[idx]
@@ -363,7 +358,6 @@ def validation(model, val_dataloader,val_dataset, device, eval_obj,config):
     top_p= config['top_p']
     temp = config['temp']
     stop_token =  config['stop_token']
-
     model.eval()
     loss_meter = AverageMeter("eval_loss", ":.5f")
 
@@ -373,7 +367,8 @@ def validation(model, val_dataloader,val_dataset, device, eval_obj,config):
     val_targets = []
     stop_token_index = tokenizer.encode(stop_token)[0]
 
-    for prefix, targets, mask in val_dataloader:
+    for idx, (prefix, targets, mask) in enumerate(val_dataloader):
+        print(idx)
         targets, mask, prefix = targets.to(device), mask.to(device), prefix.to(device, dtype=torch.float32)
         #get the class idx for each instance in the batch.
         prefix_embed = model(prefix,targets.to(device), mask.to(device), only_prefix = True)
@@ -432,6 +427,7 @@ def validation(model, val_dataloader,val_dataset, device, eval_obj,config):
 
 
 def train(train_dataset, val_dataset, model, eval_obj, config):
+    model_name = config["wandb"]["run_name"]
     val_min = float(1000)
     device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
     batch_size = config['batch_size']
@@ -449,7 +445,19 @@ def train(train_dataset, val_dataset, model, eval_obj, config):
     scheduler = get_linear_schedule_with_warmup(
         optimizer, num_warmup_steps=config['warmup_steps'], num_training_steps=epochs* len(train_dataloader))
 
-    step = 0
+    step = 1
+
+    # Validation loss before epoch 1
+    val_loss_meter, val_bleu, val_meteor = validation(model, val_dataloader, val_dataset, device, eval_obj, config)
+    val_log = {
+    "val_loss_avg": val_loss_meter.avg,
+    "val_bleu" : val_bleu,
+    "val_meteor" : val_meteor,
+    }
+    if config['logging']: 
+        wandb.log(val_log, step = step)
+    # print(val_log)
+
     for epoch in range(epochs):
         
         print(f">>> Training epoch {epoch}")
@@ -462,15 +470,14 @@ def train(train_dataset, val_dataset, model, eval_obj, config):
         train_start = time.time()
 
         for idx, (prefix, targets, mask) in enumerate(train_dataloader):
-            step+=1
 
             model.zero_grad()
             optimizer.zero_grad()
-            targets, mask, prefix = targets.to(device), mask.to(device), prefix.to(device, dtype=torch.float32)
+            targets, mask, prefix = targets.to(device), mask.to(device), prefix.to(device, dtype=torch.float32) # (B,41), (B,51), (B,1024/512)
             outputs = model(prefix,targets, mask)
             # logits corresponding to preds for all caption tokens are taken.
-            # i.e from logit of last learnable token to logit of second last caption token.
-            logits = outputs.logits[:, train_dataset.prefix_len - 1: -1] 
+            # i.e FROM logit of last learnable token TO logit of second last caption token.
+            logits = outputs.logits[:, train_dataset.prefix_len - 1: -1]  #(B,41, vocab_size)
             loss = nnf.cross_entropy(logits.reshape(-1, logits.shape[-1]), targets.to(torch.long).flatten(), ignore_index=0) # (B,T) flattened to (B*T)
 
             # accumulating loss,tgts,preds
@@ -478,7 +485,25 @@ def train(train_dataset, val_dataset, model, eval_obj, config):
             epoch_train_tgts.append(targets)
             probs = torch.nn.functional.softmax(logits, dim=-1)
             preds = torch.multinomial(probs.view(-1, probs.shape[-1]), num_samples=1)
-            epoch_train_preds.append(preds.view(batch_size,targets.shape[-1], -1).squeeze(-1))
+            epoch_train_preds.append(preds.view(batch_size,targets.shape[-1], -1).squeeze(-1)) # (B,41) --> each pred is same shape as targets obviously. 
+            
+            # # optimizing on BLEU/METEOR metric for each batch
+            # iter_train_losses = []
+            # iter_train_tgts = []
+            # iter_train_preds = []
+            # iter_train_tgts.append(targets)
+            # probs = torch.nn.functional.softmax(logits, dim=-1)
+            # preds = torch.multinomial(probs.view(-1, probs.shape[-1]), num_samples=1)
+            # iter_train_preds.append(preds.view(batch_size,targets.shape[-1], -1).squeeze(-1)) # (B,41) --> each pred is same shape as targets obviously. 
+
+            # pred_cap = tokenizer.batch_decode(torch.cat((iter_train_preds), dim=0))
+            # iter_train_tgts = torch.cat((iter_train_tgts), dim=0)
+            # mask = iter_train_tgts > 0
+            # target_cap  = [[tokenizer.decode(iter_train_tgts[i][mask[i]])] for i in range(iter_train_tgts.shape[0])]
+            # # iter_bleu = torch.tensor(eval_obj.get_metric('bleu',pred_cap, target_cap )['bleu']).to(device)
+            # iter_meteor = torch.tensor(eval_obj.get_metric('meteor',pred_cap, target_cap )['meteor']).to(device)
+
+            # loss+=iter_meteor
             
             loss_meter.update(loss.item(), targets.shape[0])
             loss.backward()
@@ -491,6 +516,7 @@ def train(train_dataset, val_dataset, model, eval_obj, config):
             "lr": optimizer.state_dict()["param_groups"][0]["lr"],}
             if config['logging']:
                 wandb.log(train_log, step = step)
+            step+=1
 
         #Eval metrics for epoch i
         pred_cap = tokenizer.batch_decode(torch.cat((epoch_train_preds), dim=0))
@@ -522,38 +548,38 @@ def train(train_dataset, val_dataset, model, eval_obj, config):
         # progress.update()
     # progress.close()
         # print(data_to_log)
-        if config['logging']:
+        if config['logging'] and config['save_best_val']:
                 if val_loss_meter.avg< val_min:
                     val_min = val_loss_meter.avg
-                    torch.save(
-                        model.state_dict(),
-                        os.path.join(output_dir, "dummy.pt"),
-                    )
+                    save_model(output_dir,f'{epoch+1}',model)
+        elif config['logging'] and config['save_every_epoch']:
+            save_model(output_dir,f'{epoch+1}',model)
+            
     return model
 
 def trigger_training(config):
         
-    train_dataset = CocoDataset(config['train_data'], config['prefix_length'],config['normalize_prefix'])
-    val_dataset = CocoDataset(config['val_data'], config['prefix_length'],config['normalize_prefix'])
+    train_dataset = CocoDataset(config['train_data'], config['prefix_length'],config['normalize_prefix'], 'train', config['tokenizer'])
+    val_dataset = CocoDataset(config['val_data'], config['prefix_length'],config['normalize_prefix'],'val', config['tokenizer'])
     model = Model(clip_dim = config['prefix_dim'], prefix_len = config['prefix_length'], const_len =config['prefix_length'], num_layers = config['num_layers'])
     eval_obj = Metrics()
 
     if config['logging'] and (not config["wandb"]["sweep"]):
         wandb.init(entity=config["wandb"]["entity"], project=config["wandb"]["project"], config=config)
-        wandb.run.name = config["run_name"]
+        wandb.run.name = config["wandb"]["run_name"]
     
     train(train_dataset,val_dataset,model,eval_obj,config)
 
 def sweep_agent_manager():
     wandb.init()
     config = dict(wandb.config)
-    run_name = config['run_name']
+    run_name = config["wandb"]["run_name"]
     wandb.run.name = run_name
     # logging.basicConfig(filename=f'/home2/manugaur/clip_cap_manu/logs/num_layer_sweep/{run_name}.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
     trigger_training(config)
 
 def get_config():
-    with open('/home2/manugaur/img_cap_self_retrieval/config.yml') as f:
+    with open('/home2/manugaur/img_cap_self_retrieval/clip_cap.yml') as f:
         config = yaml.load(f,Loader=yaml.FullLoader)
     return config
 def main():
