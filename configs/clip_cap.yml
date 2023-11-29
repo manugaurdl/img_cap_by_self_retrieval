@@ -6,7 +6,7 @@ lr : 2e-5
 optimizer: "AdamW"
 num_epochs: 10
 prefix_length : 10
-prefix_dim : 768
+prefix_dim : 512
 batch_size : 40
 num_layers : 2
 warmup_steps : 5000
@@ -21,8 +21,8 @@ temp : 1
 stop_token : '.'
 
 #Boolean variables
-logging : True
-save_every_epoch : True
+logging : False
+save_every_epoch : False
 save_best_val : False
 normalize_prefix : True 
 use_beam_search: False
@@ -34,12 +34,12 @@ wandb :
   sweep_run_count : 100
   entity : "manugaur"
   project : "img_cap_self_retrieval"
-  run_name : "siglip_2_layers"
+  run_name : "clip_ViT-B_32"
 
 # Path variables
-train_data : '/ssd_scratch/cvit/manu/img_cap_self_retrieval_siglip/data/siglip_train_emb.pkl'
-val_data : '/ssd_scratch/cvit/manu/img_cap_self_retrieval_siglip/data/siglip_val_emb.pkl'
-out_dir : '/ssd_scratch/cvit/manu/img_cap_self_retrieval_siglip/checkpoints/siglip_2_layers/'
+train_data : '/ssd_scratch/cvit/manu/img_cap_self_retrieval_clip/data/clip_ViT-B_32_train_emb.pkl'
+val_data : '/ssd_scratch/cvit/manu/img_cap_self_retrieval_clip/data/clip_ViT-B_32_val_emb.pkl'
+out_dir : '/ssd_scratch/cvit/manu/img_cap_self_retrieval_clip/checkpoints/clip_ViT-B_32/'
 
 
 
