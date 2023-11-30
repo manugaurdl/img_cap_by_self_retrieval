@@ -17,9 +17,10 @@ import timeit
 import ipdb
 import logging
 import yaml
+import wandb
 import time
 import evaluate
-from utils.helper_functions import open_pickle, dump_pickle, save_model, Summary, AverageMeter, Metrics
+from utils.helper_functions import *#open_pickle, dump_pickle, save_model, Summary, AverageMeter, Metrics,int2mil
 from data.cocodataset import *
 
 
@@ -111,6 +112,8 @@ def train(train_dataset, val_dataset, model, eval_obj, config):
         os.makedirs(output_dir)
     model = model.to(device)
     model.train()
+    if config['freeze_gpt']:
+        model.gpt.eval()
     loss_meter = AverageMeter("train_loss", ":.5f")
     optimizer = AdamW(model.parameters(), lr=float(config['lr']))
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
@@ -225,7 +228,7 @@ def train(train_dataset, val_dataset, model, eval_obj, config):
         if config['logging'] and config['save_best_val']:
                 if val_loss_meter.avg< val_min:
                     val_min = val_loss_meter.avg
-                    save_model(output_dir,f'{epoch+1}',model)
+                    save_model(output_dir,f'best_val_epoch_{epoch+1}',model)
         elif config['logging'] and config['save_every_epoch']:
             save_model(output_dir,f'{epoch+1}',model)
             
@@ -235,7 +238,9 @@ def trigger_training(config):
         
     train_dataset = CocoDataset(config['train_data'], config['prefix_length'],config['normalize_prefix'], 'train', config['tokenizer'])
     val_dataset = CocoDataset(config['val_data'], config['prefix_length'],config['normalize_prefix'],'val', config['tokenizer'])
-    model = Model(clip_dim = config['prefix_dim'], prefix_len = config['prefix_length'], const_len =config['prefix_length'], num_layers = config['num_layers'])
+    model = Model(clip_dim = config['prefix_dim'], prefix_len = config['prefix_length'], const_len =config['prefix_length'], 
+                num_layers = config['num_layers'], attn_heads = config['attn_heads'], freeze_gpt = config['freeze_gpt'])
+    trainable_params(model)
     eval_obj = Metrics()
 
     if config['logging'] and (not config["wandb"]["sweep"]):
