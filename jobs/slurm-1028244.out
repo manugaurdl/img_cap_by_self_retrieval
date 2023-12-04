@@ -1,0 +1,6 @@
+==========================================
+SLURM_JOB_ID = 1028244
+SLURM_NODELIST = gnode080
+SLURM_JOB_GPUS = 1
+==========================================
+slurmstepd: error: *** JOB 1028244 ON gnode080 CANCELLED AT 2023-12-01T11:25:14 ***

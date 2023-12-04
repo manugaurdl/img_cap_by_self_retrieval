@@ -5,7 +5,7 @@ from torch.utils.data import Dataset, DataLoader
 import sys
 import torch
 import torch.nn as nn
-from torch.nn import functional as nnf
+from torch.nn import functional as F
 import pickle
 from enum import Enum
 from transformers import GPT2Tokenizer, GPT2LMHeadModel, AdamW, get_linear_schedule_with_warmup
@@ -22,86 +22,15 @@ import time
 import evaluate
 from utils.helper_functions import *#open_pickle, dump_pickle, save_model, Summary, AverageMeter, Metrics,int2mil
 from data.cocodataset import *
+from utils.eval_utils import validation
 
 
-
-@torch.no_grad()
-def validation(model, val_dataloader,val_dataset, device, eval_obj,config):
-
-    tokenizer = val_dataset.tokenizer
-    max_length = val_dataset.max_len_token
-    # max_length = config['max_length']
-    top_p= config['top_p']
-    temp = config['temp']
-    stop_token =  config['stop_token']
-    model.eval()
-    loss_meter = AverageMeter("eval_loss", ":.5f")
-
-    generated_num = 0
-    generated_list = []
-    val_preds = []
-    val_targets = []
-    stop_token_index = tokenizer.encode(stop_token)[0]
-
-    for idx, (prefix, targets, mask) in enumerate(val_dataloader):
-        targets, mask, prefix = targets.to(device), mask.to(device), prefix.to(device, dtype=torch.float32)
-        #get the class idx for each instance in the batch.
-        prefix_embed = model(prefix,targets.to(device), mask.to(device), only_prefix = True)
-        generated = prefix_embed
-        batch_preds = []
-        tokens = None
-
-        # each iteration, the context on which generation is conditioned increases by 1. (prefix + gpt_outputs)
-        for t in range(round(float(max_length))):
-
-            outputs = model.gpt(inputs_embeds=generated)
-            logits = outputs.logits
-            # logit of last token = next token prediction
-            logits =  logits[:, -1, :]/ (temp if temp > 0 else 1.0)  # (B, T, vocab_size)    
-            # preds for timestep t
-            batch_preds.append(logits.unsqueeze(1))
-            #---------------------------------------------------------------
-            """ Different methods of generating the next token """
-            
-            # 1. TAKING THE LARGEST LOGIT
-            # next_token = torch.argmax(logits, dim = -1).unsqueeze(0)
-            
-            # 2. SAMPLE FROM VOCAB DISTRIBUTION
-            probs = torch.nn.functional.softmax(logits, dim=-1) # (B, C)
-            next_token = torch.multinomial(probs, num_samples=1) # (B, 1)
-            #---------------------------------------------------------------
-
-            # for the sampled token, go the nn.Embedding table and get token embedding 
-            next_token_embed = model.gpt.transformer.wte(next_token) # (B,1,768)
-            if tokens is None:
-                tokens = next_token
-            else:
-                tokens = torch.cat((tokens, next_token), dim=1)
-
-            generated = torch.cat((generated, next_token_embed), dim=1)
-            # if stop_token_index == next_token.item():
-            #     break
-
-        #loss meter updated for each batch
-        logits  = torch.cat((batch_preds), dim = 1)
-        loss = nnf.cross_entropy(logits.reshape(-1, logits.shape[-1]), targets.to(torch.long).flatten(), ignore_index = 0)
-        loss_meter.update(loss.item(), targets.shape[0])
-        
-        val_preds.append(tokens)
-        val_targets.append(targets)
-    # eval metrics for val set 
-    
-    pred_cap = tokenizer.batch_decode(torch.cat((val_preds), dim=0))
-    val_targets = torch.cat((val_targets), dim=0)
-    mask = val_targets>0
-    target_cap  = [[tokenizer.decode(val_targets[i][mask[i]])] for i in range(val_targets.shape[0])]
-    bleu_score = eval_obj.get_metric('bleu',pred_cap, target_cap )['bleu']
-    meteor_score  = eval_obj.get_metric('meteor',pred_cap, target_cap)['meteor']
-        
-    return loss_meter, bleu_score, meteor_score
+TRAIN = False
 
 
-def train(train_dataset, val_dataset, model, eval_obj, config):
+def train(model, eval_obj, config):
+
+    # params and model
     model_name = config["wandb"]["run_name"]
     val_min = float(1000)
     device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
@@ -114,23 +43,35 @@ def train(train_dataset, val_dataset, model, eval_obj, config):
     model.train()
     if config['freeze_gpt']:
         model.gpt.eval()
+    
     loss_meter = AverageMeter("train_loss", ":.5f")
     optimizer = AdamW(model.parameters(), lr=float(config['lr']))
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+
+    # Dataloaders
+    if TRAIN:
+        train_dataset = CocoDataset(config['train_data'], config['prefix_length'],config['normalize_prefix'], 'train', config['tokenizer'])
+        train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+
+    val_dataset = CocoDataset(config['val_data'], config['prefix_length'],config['normalize_prefix'],'val', config['tokenizer'])
     val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
-    tokenizer = train_dataset.tokenizer
-    scheduler = get_linear_schedule_with_warmup(
-        optimizer, num_warmup_steps=config['warmup_steps'], num_training_steps=epochs* len(train_dataloader))
+    test_dataset = CocoDataset(config['test_data'], config['prefix_length'],config['normalize_prefix'],'test', config['tokenizer'])
+    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+    
+    tokenizer = val_dataset.tokenizer
+    
+    if TRAIN: 
+        scheduler = get_linear_schedule_with_warmup(
+            optimizer, num_warmup_steps=config['warmup_steps'], num_training_steps=epochs* len(train_dataloader))
 
     step = 1
 
     # Validation loss before epoch 1
-    val_loss_meter, val_bleu, val_meteor = validation(model, val_dataloader, val_dataset, device, eval_obj, config)
-    val_log = {
-    "val_loss_avg": val_loss_meter.avg,
-    "val_bleu" : val_bleu,
-    "val_meteor" : val_meteor,
-    }
+    val_loss_meter, lang_stats = validation(model, val_dataloader, val_dataset, device, eval_obj, config)
+   
+    val_log = {"val_loss_avg": val_loss_meter.avg,
+            "CIDEr" : lang_stats["CIDEr"],
+            "SPICE" : lang_stats["SPICE"]
+                            }
     if config['logging']: 
         wandb.log(val_log, step = step)
     # print(val_log)
@@ -142,12 +83,13 @@ def train(train_dataset, val_dataset, model, eval_obj, config):
 
         # progress = tqdm(total=len(train_dataloader), desc=output_prefix)
         epoch_train_losses = []
-        epoch_train_preds = []
+        epoch_train_decoded_cap = []
         epoch_train_tgts = []
         train_start = time.time()
 
-        for idx, (prefix, targets, mask) in enumerate(train_dataloader):
+        predictions = [] # coco
 
+        for idx, (prefix, targets, mask, meta_data) in enumerate(train_dataloader):
             model.zero_grad()
             optimizer.zero_grad()
             targets, mask, prefix = targets.to(device), mask.to(device), prefix.to(device, dtype=torch.float32) # (B,41), (B,51), (B,1024/512)
@@ -155,32 +97,29 @@ def train(train_dataset, val_dataset, model, eval_obj, config):
             # logits corresponding to preds for all caption tokens are taken.
             # i.e FROM logit of last learnable token TO logit of second last caption token.
             logits = outputs.logits[:, train_dataset.prefix_len - 1: -1]  #(B,41, vocab_size)
-            loss = nnf.cross_entropy(logits.reshape(-1, logits.shape[-1]), targets.to(torch.long).flatten(), ignore_index=0) # (B,T) flattened to (B*T)
-
+            loss = F.cross_entropy(logits.reshape(-1, logits.shape[-1]), targets.to(torch.long).flatten(), ignore_index=0) # (B,T) flattened to (B*T)
+            
             # accumulating loss,tgts,preds
             epoch_train_losses.append(loss.item())
             epoch_train_tgts.append(targets)
+                        
             probs = torch.nn.functional.softmax(logits, dim=-1)
-            preds = torch.multinomial(probs.view(-1, probs.shape[-1]), num_samples=1)
-            epoch_train_preds.append(preds.view(batch_size,targets.shape[-1], -1).squeeze(-1)) # (B,41) --> each pred is same shape as targets obviously. 
+            preds = torch.multinomial(probs.view(-1, probs.shape[-1]), num_samples=1) # preds is flattened out --> (B*max_cap_len , 1)
+
+
+            # epoch_train_preds.append(preds.view(batch_size,targets.shape[-1], -1).squeeze(-1)) # (B,41) --> each pred is same shape as targets obviously. 
+            preds = preds.view(batch_size,targets.shape[-1], -1).squeeze(-1) # reshape to (B, max_cap_len)
             
-            # # optimizing on BLEU/METEOR metric for each batch
-            # iter_train_losses = []
-            # iter_train_tgts = []
-            # iter_train_preds = []
-            # iter_train_tgts.append(targets)
-            # probs = torch.nn.functional.softmax(logits, dim=-1)
-            # preds = torch.multinomial(probs.view(-1, probs.shape[-1]), num_samples=1)
-            # iter_train_preds.append(preds.view(batch_size,targets.shape[-1], -1).squeeze(-1)) # (B,41) --> each pred is same shape as targets obviously. 
+            entropy = -(F.softmax(logits, dim=2) * logits).sum(2).sum(1) / ((preds>0).to(logits).sum(1)+1)
+            perplexity = - logits.gather(2, preds.unsqueeze(2)).squeeze(2).sum(1) / ((preds>0).to(logits).sum(1)+1)
 
-            # pred_cap = tokenizer.batch_decode(torch.cat((iter_train_preds), dim=0))
-            # iter_train_tgts = torch.cat((iter_train_tgts), dim=0)
-            # mask = iter_train_tgts > 0
-            # target_cap  = [[tokenizer.decode(iter_train_tgts[i][mask[i]])] for i in range(iter_train_tgts.shape[0])]
-            # # iter_bleu = torch.tensor(eval_obj.get_metric('bleu',pred_cap, target_cap )['bleu']).to(device)
-            # iter_meteor = torch.tensor(eval_obj.get_metric('meteor',pred_cap, target_cap )['meteor']).to(device)
-
-            # loss+=iter_meteor
+            # Decode batch preds and add it to coco_predictions list 
+            decoded_cap = tokenizer.batch_decode(preds)
+            for k, sent in enumerate(decoded_cap):
+                entry = {'image_id' : meta_data['cocoid'][k].item(), 'caption': sent, 'perplexity': perplexity[k].item(), 'entropy': entropy[k].item()}
+                predictions.append(entry)
+            
+            epoch_train_decoded_cap.extend(decoded_cap)
             
             loss_meter.update(loss.item(), targets.shape[0])
             loss.backward()
@@ -196,16 +135,24 @@ def train(train_dataset, val_dataset, model, eval_obj, config):
             step+=1
 
         #Eval metrics for epoch i
-        pred_cap = tokenizer.batch_decode(torch.cat((epoch_train_preds), dim=0))
+        import ipdb;ipdb.set_trace()
         epoch_train_tgts = torch.cat((epoch_train_tgts), dim=0)
         mask = epoch_train_tgts > 0
         target_cap  = [[tokenizer.decode(epoch_train_tgts[i][mask[i]])] for i in range(epoch_train_tgts.shape[0])]
-        train_bleu = eval_obj.get_metric('bleu',pred_cap, target_cap )['bleu']
-        train_meteor = eval_obj.get_metric('meteor',pred_cap, target_cap)['meteor']
+
+        lang_stats = language_eval("cocotalk.json", predictions, "train_temp")
+
+
 
         val_start = time.time()
         #Calculate validation loss 
-        val_loss_meter, val_bleu, val_meteor = validation(model, val_dataloader, val_dataset, device, eval_obj, config)
+        val_loss_meter, lang_stats = validation(model, val_dataloader, val_dataset, device, eval_obj, config)
+   
+        val_log = {"val_loss_avg": val_loss_meter.avg,
+                "CIDEr" : lang_stats["CIDEr"],
+                "SPICE" : lang_stats["SPICE"]
+                                }
+
         val_end = time.time()
         print(f'train time : {val_start - train_start} val time : {val_end - val_start}')
         
@@ -228,7 +175,7 @@ def train(train_dataset, val_dataset, model, eval_obj, config):
         if config['logging'] and config['save_best_val']:
                 if val_loss_meter.avg< val_min:
                     val_min = val_loss_meter.avg
-                    save_model(output_dir,f'best_val_epoch_{epoch+1}',model)
+                    save_model(output_dir,f'{model_name}_epoch_{epoch+1}',model)
         elif config['logging'] and config['save_every_epoch']:
             save_model(output_dir,f'{epoch+1}',model)
             
@@ -236,10 +183,8 @@ def train(train_dataset, val_dataset, model, eval_obj, config):
 
 def trigger_training(config):
         
-    train_dataset = CocoDataset(config['train_data'], config['prefix_length'],config['normalize_prefix'], 'train', config['tokenizer'])
-    val_dataset = CocoDataset(config['val_data'], config['prefix_length'],config['normalize_prefix'],'val', config['tokenizer'])
     model = Model(clip_dim = config['prefix_dim'], prefix_len = config['prefix_length'], const_len =config['prefix_length'], 
-                num_layers = config['num_layers'], attn_heads = config['attn_heads'], freeze_gpt = config['freeze_gpt'])
+                num_layers = config['num_layers'], attn_heads = config['attn_heads'], freeze_gpt = config['freeze_gpt'],cocotalk = config['cocotalk'])
     trainable_params(model)
     eval_obj = Metrics()
 
@@ -247,7 +192,7 @@ def trigger_training(config):
         wandb.init(entity=config["wandb"]["entity"], project=config["wandb"]["project"], config=config)
         wandb.run.name = config["wandb"]["run_name"]
     
-    train(train_dataset,val_dataset,model,eval_obj,config)
+    train(model,eval_obj,config)
 
 def sweep_agent_manager():
     wandb.init()

@@ -11,16 +11,25 @@ from models.transformer import *
 
 class CocoDataset(Dataset):
     """
-    inputs : data dict--> RN50 clip embeddings, corresponding captions.
+    inputs : data dict-->  clip embeddings,  corresponding captions.
     returns : clip embedding, tokenzied caption, mask.
               Caption tokens are padded. Max length of 40 is ensured. 
               Mask is of length 50 however. As it has torch.ones(1,10) prepended to captions mask for image prefix embedding. 
     """
     
-    def __init__(self, data_path, prefix_len,norm_prefix,split, tokenizer):
+    def __init__(self, data_path, prefix_len,norm_prefix, split, tokenizer):
+        """
+        data_path : {model}_{split}_emb.pkl 
+        indexed_dataset_path : {split}_caption_tokens
+        """
         self.data = open_pickle(data_path)
         self.clip_embed = self.data['clip_embedding']
-        self.meta_data = self.data['captions']
+        self.captions = self.data['caption']
+        self.cocoids = self.data['cocoid']
+        self.filenames = self.data['filename']
+        self.sent_ids = self.data['sent_id']
+        
+
         self.tokenizer = GPT2Tokenizer.from_pretrained(tokenizer)
         self.prefix_len = prefix_len
         self.norm_prefix = norm_prefix
@@ -28,23 +37,19 @@ class CocoDataset(Dataset):
 
         #dataset needs to be arranged so a given 'idx' --> clip_embed of image, tokenized caption.
         # cannot tokenize everytime. Too expensive.
-        
         self.indexed_dataset_path = os.path.join(data_path.split('/data')[0],f'data/{self.split}_caption_tokens.pkl')
         if os.path.isfile(self.indexed_dataset_path):
-            print("loading data.... ")
+            print(f"loading {self.split} data.... ")
             self.tokenized_captions, self.max_len_token = open_pickle(self.indexed_dataset_path)
         else:
             #using a given idx, we can access the clip embedding and its corresponding tokenized caption 
-            print("creating data")
+            print(f"tokenizing {self.split} captions")
             self.tokenized_captions = []
             token_len_list = []
 
-            for meta_data in self.meta_data:
+            for caption in self.captions:
                 
-                if self.split =='val':
-                    tokens = torch.tensor(self.tokenizer.encode(meta_data['caption']),dtype=torch.int)
-                else:
-                    tokens = torch.tensor(self.tokenizer.encode(meta_data),dtype=torch.int)
+                tokens = torch.tensor(self.tokenizer.encode(caption),dtype=torch.int)
                 self.tokenized_captions.append(tokens)
                 token_len_list.append(tokens.shape[-1])
             
@@ -85,10 +90,16 @@ class CocoDataset(Dataset):
 
 
     def __getitem__(self, idx): 
+        
         padded_tokens, mask = self.pad(idx)
         prefix = self.clip_embed[idx]
+        # meta data
+        cocoid = self.cocoids[idx] 
+        filename = self.filenames[idx]
+        sent_id = self.sent_ids[idx]
+
         if self.norm_prefix:
             prefix = prefix.float()
             prefix = prefix/prefix.norm(2,-1) # L2 norm along the last dimension
         
-        return prefix, padded_tokens, mask
+        return prefix, padded_tokens, mask, {"cocoid" : cocoid, "filename" : filename, "sent_id" : sent_id}

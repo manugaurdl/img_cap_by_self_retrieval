@@ -98,3 +98,38 @@ def int2mil(number):
 
 def trainable_params(model):
     print(f'{int2mil(sum(p.numel() for p in model.parameters() if p.requires_grad == True))} trainable params')
+
+def open_json(path):
+    with open(path, 'r') as f:
+        file = json.load(f)
+    return file
+
+
+# Input: seq, N*D numpy array, with element 0 .. vocab_size. 0 is END token.
+def decode_sequence(ix_to_word, seq):
+    N, D = seq.size()
+    out = []
+    for i in range(N):
+        txt = ''
+        for j in range(D):
+            ix = seq[i,j]
+            if ix > 0 :
+                if j >= 1:
+                    txt = txt + ' '
+                try:
+                    txt = txt + ix_to_word[str(ix.item())]
+                except:
+                    import ipdb;ipdb.set_trace()
+
+            else:
+                break
+        if int(os.getenv('REMOVE_BAD_ENDINGS', '0')):
+            flag = 0
+            words = txt.split(' ')
+            for j in range(len(words)):
+                if words[-j-1] not in bad_endings:
+                    flag = -j
+                    break
+            txt = ' '.join(words[0:len(words)+flag])
+        out.append(txt.replace('@@ ', ''))
+    return out

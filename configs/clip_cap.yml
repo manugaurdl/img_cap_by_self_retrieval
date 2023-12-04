@@ -2,12 +2,12 @@
 gpu_id: 0
 
 # Hyperparams
-lr : 2e-7
+lr : 2e-5
 optimizer: "AdamW"
 num_epochs: 10
 prefix_length : 10
 prefix_dim : 512
-batch_size : 40
+batch_size : 3
 num_layers : 6
 attn_heads : 8
 
@@ -20,9 +20,11 @@ max_length : 67  # maximum number of words
 top_p : 0.8
 temp : 1
 stop_token : '.'
+method : "clip_cap"
+
 
 #Boolean variables
-logging : True
+logging : False
 save_every_epoch : False
 save_best_val : True
 normalize_prefix : True 
@@ -35,12 +37,17 @@ wandb :
   sweep_run_count : 100
   entity : "manugaur"
   project : "img_cap_self_retrieval"
-  run_name : "clip_ViT-B_32_gpt_finetune_2e-7"
+  run_name : "clip_ViT-B_32_gpt_finetune_2e-5"
 
+
+# eval 
+lang_eval : 1
+sampling_method : "sample"
 # Path variables
 train_data : '/ssd_scratch/cvit/manu/img_cap_self_retrieval_clip/data/clip_ViT-B_32_train_emb.pkl'
 val_data : '/ssd_scratch/cvit/manu/img_cap_self_retrieval_clip/data/clip_ViT-B_32_val_emb.pkl'
+test_data : '/ssd_scratch/cvit/manu/img_cap_self_retrieval_clip/data/clip_ViT-B_32_test_emb.pkl'
 out_dir : '/ssd_scratch/cvit/manu/img_cap_self_retrieval_clip/checkpoints/clip_ViT-B_32/'
-
+cocotalk : '/ssd_scratch/cvit/manu/img_cap_self_retrieval_clip/data/cocotalk.json'
 
 

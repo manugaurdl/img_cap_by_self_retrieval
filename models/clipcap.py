@@ -4,7 +4,7 @@ import torch.nn as nn
 from torch.nn import functional as nnf
 from transformers import GPT2Tokenizer, GPT2LMHeadModel, AdamW, get_linear_schedule_with_warmup
 from typing import Tuple, Optional, Union
-
+from utils.helper_functions import *
 
 class TransformerMapper(nn.Module):
     
@@ -46,7 +46,7 @@ class MLP(nn.Module):
 
 class Model(nn.Module):
 
-    def __init__(self, clip_dim,prefix_len, const_len,attn_heads, num_layers,freeze_gpt):
+    def __init__(self, clip_dim,prefix_len, const_len,attn_heads, num_layers,freeze_gpt,cocotalk):
         super().__init__()
         self.clip_dim = clip_dim
         self.prefix_len = prefix_len
@@ -56,6 +56,12 @@ class Model(nn.Module):
         self.freeze_gpt = freeze_gpt
         self.gpt = GPT2LMHeadModel.from_pretrained('gpt2')
         self.gpt_dim = self.gpt.transformer.wte.weight.shape[1]     #token embedding weight.shape
+
+        # cocotalk vocab
+        self.vocab = open_json(cocotalk)['ix_to_word']
+        bad_endings = ['a','an','the','in','for','at','of','with','before','after','on','upon','near','to','is','are','am','the']
+        self.bad_endings_ix = [int(k) for k,v in self.vocab.items() if v in bad_endings]
+
 
         if self.freeze_gpt:
             self.mapping_network = TransformerMapper(self.prefix_len, self.clip_dim, self.gpt_dim, self.const_len, self.attn_heads, self.num_layers)
