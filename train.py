@@ -23,12 +23,12 @@ import evaluate
 from utils.helper_functions import *#open_pickle, dump_pickle, save_model, Summary, AverageMeter, Metrics,int2mil
 from data.cocodataset import *
 from utils.eval_utils import validation
+from utils.train_algos import *
+from utils.rewards import init_scorer
+TRAIN = True
 
 
-TRAIN = False
-
-
-def train(model, eval_obj, config):
+def train(model, config):
 
     # params and model
     model_name = config["wandb"]["run_name"]
@@ -50,7 +50,7 @@ def train(model, eval_obj, config):
     # Dataloaders
     if TRAIN:
         train_dataset = CocoDataset(config['train_data'], config['prefix_length'],config['normalize_prefix'], 'train', config['tokenizer'])
-        train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+        train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers = 4)
 
     val_dataset = CocoDataset(config['val_data'], config['prefix_length'],config['normalize_prefix'],'val', config['tokenizer'])
     val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
@@ -58,6 +58,10 @@ def train(model, eval_obj, config):
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
     
     tokenizer = val_dataset.tokenizer
+    prefix_len = val_dataset.prefix_len
+    max_length = val_dataset.max_len_token
+    temp = config['temp']
+    stop_token =  tokenizer.encode(config['stop_token'])[0]
     
     if TRAIN: 
         scheduler = get_linear_schedule_with_warmup(
@@ -66,15 +70,19 @@ def train(model, eval_obj, config):
     step = 1
 
     # Validation loss before epoch 1
-    val_loss_meter, lang_stats = validation(model, val_dataloader, val_dataset, device, eval_obj, config)
+    
+    # val_loss_meter, lang_stats = validation(model, val_dataloader,val_dataset, device, config)
    
-    val_log = {"val_loss_avg": val_loss_meter.avg,
-            "CIDEr" : lang_stats["CIDEr"],
-            "SPICE" : lang_stats["SPICE"]
-                            }
-    if config['logging']: 
-        wandb.log(val_log, step = step)
+    # val_log = {"val_loss_avg": val_loss_meter.avg,
+    #         "CIDEr" : lang_stats["CIDEr"],
+    #         "SPICE" : lang_stats["SPICE"]
+    #                         }
+    # if config['logging']: 
+    #     wandb.log(val_log, step = step)
     # print(val_log)
+    if config['scst']:
+        init_scorer(config['cached_tokens'])
+
 
     for epoch in range(epochs):
         
@@ -88,90 +96,81 @@ def train(model, eval_obj, config):
         train_start = time.time()
 
         predictions = [] # coco
+        step_time_avg = []
 
         for idx, (prefix, targets, mask, meta_data) in enumerate(train_dataloader):
+            step_time_start = time.time()
+
             model.zero_grad()
             optimizer.zero_grad()
+
             targets, mask, prefix = targets.to(device), mask.to(device), prefix.to(device, dtype=torch.float32) # (B,41), (B,51), (B,1024/512)
-            outputs = model(prefix,targets, mask)
-            # logits corresponding to preds for all caption tokens are taken.
-            # i.e FROM logit of last learnable token TO logit of second last caption token.
-            logits = outputs.logits[:, train_dataset.prefix_len - 1: -1]  #(B,41, vocab_size)
-            loss = F.cross_entropy(logits.reshape(-1, logits.shape[-1]), targets.to(torch.long).flatten(), ignore_index=0) # (B,T) flattened to (B*T)
             
-            # accumulating loss,tgts,preds
+            if not config['scst']: 
+                loss, preds, entropy, perplexity = LMCriterion(model, prefix,targets, mask, meta_data, prefix_len, config)
+                
+                # Decode batch preds and add it to coco_predictions list 
+                decoded_cap = tokenizer.batch_decode(preds)
+                
+                for k, sent in enumerate(decoded_cap):
+                    entry = {'image_id' : meta_data['cocoid'][k].item(), 'caption': sent, 'perplexity': perplexity[k].item(), 'entropy': entropy[k].item()}
+                    predictions.append(entry)
+                
+                #scst optimizes on metrics. Tracking their train performance makes no sense.
+                epoch_train_tgts.append(targets)
+                epoch_train_decoded_cap.extend(decoded_cap)
+
+            else:
+
+                reward, loss = SCSCT(model, prefix, targets, mask, max_length, stop_token, config,step_time_avg)
+                
+            # accumulating loss
             epoch_train_losses.append(loss.item())
-            epoch_train_tgts.append(targets)
-                        
-            probs = torch.nn.functional.softmax(logits, dim=-1)
-            preds = torch.multinomial(probs.view(-1, probs.shape[-1]), num_samples=1) # preds is flattened out --> (B*max_cap_len , 1)
-
-
-            # epoch_train_preds.append(preds.view(batch_size,targets.shape[-1], -1).squeeze(-1)) # (B,41) --> each pred is same shape as targets obviously. 
-            preds = preds.view(batch_size,targets.shape[-1], -1).squeeze(-1) # reshape to (B, max_cap_len)
-            
-            entropy = -(F.softmax(logits, dim=2) * logits).sum(2).sum(1) / ((preds>0).to(logits).sum(1)+1)
-            perplexity = - logits.gather(2, preds.unsqueeze(2)).squeeze(2).sum(1) / ((preds>0).to(logits).sum(1)+1)
-
-            # Decode batch preds and add it to coco_predictions list 
-            decoded_cap = tokenizer.batch_decode(preds)
-            for k, sent in enumerate(decoded_cap):
-                entry = {'image_id' : meta_data['cocoid'][k].item(), 'caption': sent, 'perplexity': perplexity[k].item(), 'entropy': entropy[k].item()}
-                predictions.append(entry)
-            
-            epoch_train_decoded_cap.extend(decoded_cap)
             
             loss_meter.update(loss.item(), targets.shape[0])
             loss.backward()
             optimizer.step()
             scheduler.step()
+            step+=1
+
             
             #logging step info
             train_log = {"epoch": epoch+1,
             "train_loss_avg": loss_meter.avg,
             "lr": optimizer.state_dict()["param_groups"][0]["lr"],}
+            
+            # print(train_log)
+            step_time_avg.append(time.time() - step_time_start)
+            print(f"batch {config['batch_size']} sample_n {config['train_sample_n']}  time avg : {np.mean(np.array(step_time_avg))}")
+
             if config['logging']:
                 wandb.log(train_log, step = step)
-            step+=1
-
+            
         #Eval metrics for epoch i
-        import ipdb;ipdb.set_trace()
-        epoch_train_tgts = torch.cat((epoch_train_tgts), dim=0)
-        mask = epoch_train_tgts > 0
-        target_cap  = [[tokenizer.decode(epoch_train_tgts[i][mask[i]])] for i in range(epoch_train_tgts.shape[0])]
+        if not config['scst']:
+            epoch_train_tgts = torch.cat((epoch_train_tgts), dim=0)
+            mask = epoch_train_tgts > 0
+            target_cap  = [[tokenizer.decode(epoch_train_tgts[i][mask[i]])] for i in range(epoch_train_tgts.shape[0])]
+            lang_stats = language_eval("cocotalk.json", predictions, "train_temp")
 
-        lang_stats = language_eval("cocotalk.json", predictions, "train_temp")
-
-
-
+        #Validation
         val_start = time.time()
-        #Calculate validation loss 
-        val_loss_meter, lang_stats = validation(model, val_dataloader, val_dataset, device, eval_obj, config)
+        val_loss_meter, lang_stats = validation(model, val_dataloader, val_dataset, device, config)
    
         val_log = {"val_loss_avg": val_loss_meter.avg,
                 "CIDEr" : lang_stats["CIDEr"],
                 "SPICE" : lang_stats["SPICE"]
                                 }
-
         val_end = time.time()
         print(f'train time : {val_start - train_start} val time : {val_end - val_start}')
         
         # Logging epoch info 
-        val_log = {
-            "val_loss_avg": val_loss_meter.avg,
-            "train_bleu" : train_bleu,
-            "train_meteor" : train_meteor,
-            "val_bleu" : val_bleu,
-            "val_meteor" : val_meteor,
-            }
         if config['logging']: 
             wandb.log(val_log, step = step)
             logging.info({**train_log, **val_log})
         print({**train_log, **val_log})
-        # progress.set_postfix({"loss": loss.item()})
-        # progress.update()
-    # progress.close()
-        # print(data_to_log)
+
+        #Saving
         if config['logging'] and config['save_best_val']:
                 if val_loss_meter.avg< val_min:
                     val_min = val_loss_meter.avg
@@ -186,13 +185,12 @@ def trigger_training(config):
     model = Model(clip_dim = config['prefix_dim'], prefix_len = config['prefix_length'], const_len =config['prefix_length'], 
                 num_layers = config['num_layers'], attn_heads = config['attn_heads'], freeze_gpt = config['freeze_gpt'],cocotalk = config['cocotalk'])
     trainable_params(model)
-    eval_obj = Metrics()
 
     if config['logging'] and (not config["wandb"]["sweep"]):
         wandb.init(entity=config["wandb"]["entity"], project=config["wandb"]["project"], config=config)
         wandb.run.name = config["wandb"]["run_name"]
     
-    train(model,eval_obj,config)
+    train(model,config)
 
 def sweep_agent_manager():
     wandb.init()

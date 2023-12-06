@@ -2,7 +2,6 @@ import json
 import pickle
 import torch
 import os
-import evaluate
 
 # def save_config(args: argparse.Namespace):
 #     config = {}
@@ -77,18 +76,6 @@ def save_model(output_dir, model_name, model):
     os.path.join(output_dir, f'{model_name}.pt'),
 )
 
-class Metrics(object):
-    def __init__(self):
-        
-        self.bleu =  evaluate.load("bleu")
-        self.meteor = evaluate.load("meteor")
-    
-    def get_metric(self, metric,preds,refs):
-        if metric == "bleu":
-            return self.bleu.compute(predictions=preds, references= refs)
-        elif metric == "meteor":
-            return self.meteor.compute(predictions=preds, references= refs)
-
 def int2mil(number):
     if abs(number) >= 1_000_000:
         formatted_number = "{:.1f}M".format(number / 1_000_000)
@@ -133,3 +120,27 @@ def decode_sequence(ix_to_word, seq):
             txt = ' '.join(words[0:len(words)+flag])
         out.append(txt.replace('@@ ', ''))
     return out
+
+def repeat_tensors(n, x):
+    """
+    For a tensor of size Bx..., we repeat it n times, and make it Bnx...
+    For collections, do nested repeat
+    """
+    if torch.is_tensor(x):
+        x = x.unsqueeze(1) # Bx1x...
+        x = x.expand(-1, n, *([-1]*len(x.shape[2:]))) # Bxnx...
+        x = x.reshape(x.shape[0]*n, *x.shape[2:]) # Bnx...
+    elif type(x) is list or type(x) is tuple:
+        x = [repeat_tensors(n, _) for _ in x]
+    return x
+
+
+def split_tensors(n, x):
+    if torch.is_tensor(x):
+        assert x.shape[0] % n == 0
+        x = x.reshape(x.shape[0] // n, n, *x.shape[1:]).unbind(1)
+    elif type(x) is list or type(x) is tuple:
+        x = [split_tensors(n, _) for _ in x]
+    elif x is None:
+        x = [None] * n
+    return x

@@ -7,7 +7,7 @@ optimizer: "AdamW"
 num_epochs: 10
 prefix_length : 10
 prefix_dim : 512
-batch_size : 3
+batch_size : 1
 num_layers : 6
 attn_heads : 8
 
@@ -26,10 +26,11 @@ method : "clip_cap"
 #Boolean variables
 logging : False
 save_every_epoch : False
-save_best_val : True
+save_best_val : False
 normalize_prefix : True 
 use_beam_search: False
-freeze_gpt : False
+freeze_gpt : True
+
 # wandb related variables
 wandb : 
   sweep : False
@@ -43,6 +44,16 @@ wandb :
 # eval 
 lang_eval : 1
 sampling_method : "sample"
+eval_sample_n : 1
+
+#scst
+scst : True
+train_sample_n : 2
+cider_reward_weight : 1
+bleu_reward_weight : 0
+cached_tokens : 'coco-train-idxs'
+
+
 # Path variables
 train_data : '/ssd_scratch/cvit/manu/img_cap_self_retrieval_clip/data/clip_ViT-B_32_train_emb.pkl'
 val_data : '/ssd_scratch/cvit/manu/img_cap_self_retrieval_clip/data/clip_ViT-B_32_val_emb.pkl'

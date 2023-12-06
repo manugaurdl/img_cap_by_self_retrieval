@@ -43,10 +43,15 @@ def getCOCO(dataset):
         annFile = 'data/f30k_captions4eval.json'
     return COCO(annFile)
 
+def pad(tokens, padding):
+    pad = torch.zeros(padding)
+    pad = pad.masked_fill(pad ==0, -1)
+    tokens = torch.cat((tokens, pad)).int()
+    return tokens
 
 @torch.no_grad()
-def validation(model, val_dataloader,val_dataset, device, eval_obj,config):
-
+def validation(model, val_dataloader,val_dataset, device, config):
+    
     tokenizer = val_dataset.tokenizer
     max_length = val_dataset.max_len_token
     top_p= config['top_p']
@@ -56,50 +61,71 @@ def validation(model, val_dataloader,val_dataset, device, eval_obj,config):
     method = config['method']
     sampling_method = config['sampling_method']
     stop_token =  tokenizer.encode(config['stop_token'])[0]
-
+    eval_sample_n = config['eval_sample_n']
     generated_num = 0
     generated_list = []
-    
+    repeat_num = 0
     #additional args
     dataset ='cocotalk.json'
 
 
-    val_preds = []
-    val_targets = []
+    # val_preds = []
+    # val_targets = []
     
     model.eval()
     predictions = []
     # for idx, (prefix, targets, mask) in tqdm(enumerate(val_dataloader), total=len(val_dataloader)):
-
-
+    
+    step_time_avg = []
     for idx, (prefix, targets, mask, meta_data) in enumerate(val_dataloader):
+        step_time_start = time.time()
+
+        if idx ==0 and eval_sample_n > 1:
+            repeat_num = logits.shape[0]//targets.shape[0] 
+
         print(f'sampled batch no.{idx} in val dataloader')
         # meta_data --> cocoid, filename, sentence_id
         targets, mask, prefix = targets.to(device), mask.to(device), prefix.to(device, dtype=torch.float32)
         #get the class idx for each instance in the batch.
-        prefix_embed = model(prefix,targets.to(device), mask.to(device), only_prefix = True)
-
-        preds, seqLogprob, tokens  = sample(max_length, prefix_embed, model, temp, sampling_method, stop_token)  
-        tokens = tokens.data
-        #loss meter updated for each batch
-        logits  = torch.cat((preds), dim = 1) # (B,max_caption_len, vocab_size)
+        prefix_embed = model(prefix,targets, mask, only_prefix = True)
         
+        #sample entire caption
+        # preds : last token's logit at every time step
+        preds, seqLogprob, tokens  = sample(max_length, prefix_embed, model, temp, sampling_method, stop_token, config, sample_n = eval_sample_n)  
+        tokens = tokens.data
+    
+        logits  = torch.cat((preds), dim = 1) # (B, K , vocab_size) ; K --> max_cap_length for the batch of sampled captions
 
-        loss = F.cross_entropy(logits.reshape(-1, logits.shape[-1]), targets.to(torch.long).flatten(), ignore_index = 0)
-        loss_meter.update(loss.item(), targets.shape[0])
+        if eval_sample_n > 1: 
+            #currently not using filename, sent_id hence not repeated
+            meta_data['cocoid'] = repeat_tensors(repeat_num, meta_data['cocoid'])
+            targets = repeat_tensors(repeat_num, targets)
+
+        ## making targets and logits of equal len ------------------
+        
+        # if targets.shape[-1] != logits.shape[1]:
+        #     # pad logits --> max_len
+        #     padding = targets.shape[1] - logits.shape[1]
+        #     padding_config = (0, 0, 0, padding)  # (left, right, top, bottom)
+
+        #     logits = F.pad(logits, padding_config)
+            
+
+        # loss = F.cross_entropy(logits.reshape(-1, logits.shape[-1]), targets.to(torch.long).flatten(), ignore_index = 0)
+        # loss_meter.update(loss.item(), targets.shape[0])
 
         entropy = -(F.softmax(logits, dim=2) * logits).sum(2).sum(1) / ((tokens>0).to(logits).sum(1)+1)
         perplexity = - logits.gather(2, tokens.unsqueeze(2)).squeeze(2).sum(1) / ((tokens>0).to(logits).sum(1)+1)
 
         # generated captions of each batch added to list --> gen captions for whole split
-        val_preds.append(tokens)
-        val_targets.append(targets)
+        # val_preds.append(tokens)
+        # val_targets.append(targets)
     
     #--------------------------------------------------------
         sents = tokenizer.batch_decode(tokens)
+        
         # predictions --> [{'image_id': 184613, 'caption': 'a swimmer ravine fee...iers backs', 'perplexity': 8.26982307434082, 'entropy': 8.715027809143066}]
         for k, sent in enumerate(sents): # sents is a list of batch_size length.
-
             # entry = {'image_id': data['infos'][k]['id'], 'caption': sent, 'perplexity': perplexity[k].item(), 'entropy': entropy[k].item()}
             entry = {'image_id' : meta_data['cocoid'][k].item(), 'caption': sent, 'perplexity': perplexity[k].item(), 'entropy': entropy[k].item()}
 
@@ -113,7 +139,7 @@ def validation(model, val_dataloader,val_dataset, device, eval_obj,config):
             #     os.system(cmd)
 
             # if verbose:
-            #     print('image %s: %s' %(entry['image_id'], entry['caption']))
+            #     print('image %s: %s' %(entry['image_id'], entry['caption'])) 
 
         # if sample_n > 1:
         #     eval_split_n(model, n_predictions, [fc_feats, att_feats, att_masks, data], eval_kwargs)
@@ -130,6 +156,11 @@ def validation(model, val_dataloader,val_dataset, device, eval_obj,config):
         # if verbose:
         #     print('evaluating validation preformance... %d/%d (%f)' %(n, ix1, loss))
         break
+        step_time_avg.append(time.time() - step_time_start)
+        print(f"step time avg : {np.mean(np.array(step_time_avg))}")
+
+        
+
     lang_stats = None
 
     # #What are we saving
@@ -193,7 +224,6 @@ def language_eval(dataset, preds, method, split='val'):
     cocoRes = coco.loadRes(cache_path) #Load algorithm results and create API for accessing them.
     cocoEval = COCOEvalCap(coco, cocoRes) #
     cocoEval.params['image_id'] = cocoRes.getImgIds()
-
     cocoEval.evaluate()
 
     for metric, score in cocoEval.eval.items():
@@ -222,36 +252,62 @@ def language_eval(dataset, preds, method, split='val'):
 
 #--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-def sample(max_length, token_emb, model,temp, method, stop_token, tokens = None):
+def sample(step_time_avg, max_length, token_emb, model, temp, method, stop_token, config, sample_n = None, tokens = None):
     """
     seq : sampled sequence (B, max_len)
     seqLogprobs : logprobs for sampled words
     token_emb : initially the image embedding
     method : greedy, sample
 
-    no need for return token embedding
+    returns : preds (last token logit at every time step.)
     """
+
+    if method == "greedy":
+        sample_n = 1
+    
     preds = []
+
     unfinished = torch.ones((token_emb.shape[0],1), dtype=torch.bool) # all are unfinished i.e True at start
+        
+    # for sample_n > 1 : repeat images --> batch size increase sample_n X times 
+    if method =="sample" and sample_n > 1:
+
+        unfinished = repeat_tensors(sample_n, unfinished)
+        token_emb = repeat_tensors(sample_n, token_emb)
+    
+
+    # if method =="sample":
+    #     import ipdb;ipdb.set_trace()
+
     # each iteration, the context on which generation is conditioned increases by 1. (prefix + gpt_outputs)
+    # T1 = time.time()
+
     for t in range(round(float(max_length))):
 
         outputs = model.gpt(inputs_embeds= token_emb)
+
+        
         #LM head output --> distribution over vocab
         logits = outputs.logits # (B, prefix_len, vocab_size)    
         # logit of last token = next token prediction
         logits =  logits[:, -1, :]/ (temp if temp > 0 else 1.0)  # (B,vocab_size)
         # preds for timestep t
         preds.append(logits.unsqueeze(1)) #(B,1,vocab_size)
+
         if method == "greedy":
             sampled_logprob, next_token = torch.max(logits.data,dim = -1)
+            sampled_logprob, next_token = sampled_logprob.unsqueeze(1), next_token.unsqueeze(1)
+        
+
         elif method == "sample":
             probs = torch.nn.functional.softmax(logits, dim=-1) # (B, C)
             next_token = torch.multinomial(probs, num_samples=1) # (B, 1)
             sampled_logprob = logits.gather(1, next_token)
 
         # for the sampled token, get token embedding 
+
         next_token_embed = model.gpt.transformer.wte(next_token) # (B,1,768)
+    
 
         if tokens is None:
             tokens = next_token
@@ -259,15 +315,23 @@ def sample(max_length, token_emb, model,temp, method, stop_token, tokens = None)
         else:
             tokens = torch.cat((tokens, next_token), dim=1)
             seqLogprob = torch.cat((seqLogprob, sampled_logprob), dim = 1)
-            print(tokens.shape)
-            print(seqLogprob.shape)
+        
         token_emb = torch.cat((token_emb, next_token_embed), dim=1)
+        
 
-        # if stop token reached for all images --> break        
+
+        # if stop token reached for all images --> break
         unfinished[torch.nonzero(next_token==stop_token)] = False
+        
 
         if sum(unfinished).item() == 0:
             break
+
+    # if method=="sample":
+    #     step_time_avg.append(time.time() - T1)
+    #     print(len(step_time_avg))
+    #     print(f"bsz {config['batch_size']} sample_n {config['train_sample_n']} : {np.mean(np.array(step_time_avg))}")
+
     return preds, seqLogprob, tokens 
 
 #--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
