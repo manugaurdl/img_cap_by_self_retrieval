@@ -10,3 +10,6 @@ og_train.py
 sweep_config.yml
 wandb/
 config_siglip.yml
+data/coco-train-idxs.p
+data/coco-train-words.p
+eval_results/

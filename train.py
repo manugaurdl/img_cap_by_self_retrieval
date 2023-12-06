@@ -99,7 +99,7 @@ def train(model, config):
         step_time_avg = []
 
         for idx, (prefix, targets, mask, meta_data) in enumerate(train_dataloader):
-            step_time_start = time.time()
+            # step_time_start = time.time()
 
             model.zero_grad()
             optimizer.zero_grad()
@@ -140,8 +140,8 @@ def train(model, config):
             "lr": optimizer.state_dict()["param_groups"][0]["lr"],}
             
             # print(train_log)
-            step_time_avg.append(time.time() - step_time_start)
-            print(f"batch {config['batch_size']} sample_n {config['train_sample_n']}  time avg : {np.mean(np.array(step_time_avg))}")
+            # step_time_avg.append(time.time() - step_time_start)
+            # print(f"batch {config['batch_size']} sample_n {config['train_sample_n']}  time avg : {np.mean(np.array(step_time_avg))}")
 
             if config['logging']:
                 wandb.log(train_log, step = step)
