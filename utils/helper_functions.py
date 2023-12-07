@@ -144,3 +144,17 @@ def split_tensors(n, x):
     elif x is None:
         x = [None] * n
     return x
+
+
+def set_data_dir(config):
+
+    if config['jatayu']:
+        data_dir = '/home/manugaur/img_cap_self_retrieval/data'
+    else:
+        data_dir = '/ssd_scratch/cvit/manu'
+    
+    config['train_data'] = os.path.join(data_dir, config['train_data'])
+    config['val_data'] = os.path.join(data_dir, config['val_data'])
+    config['test_data'] = os.path.join(data_dir, config['test_data'])
+    config['out_dir'] = os.path.join(data_dir, config['out_dir'])
+    config['cocotalk'] = os.path.join(data_dir, config['cocotalk'])

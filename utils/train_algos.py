@@ -7,7 +7,7 @@ from utils.eval_utils import *
 from utils.losses import * 
 
 
-def SCSCT(model,prefix, targets, mask,max_length, stop_token, config, step_time_avg):
+def SCST(model,prefix, targets, mask,max_length, stop_token, config, step_time_avg):
     
     model.eval()
     with torch.no_grad():

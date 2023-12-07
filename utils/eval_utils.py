@@ -77,8 +77,9 @@ def validation(model, val_dataloader,val_dataset, device, config):
     # for idx, (prefix, targets, mask) in tqdm(enumerate(val_dataloader), total=len(val_dataloader)):
     
     step_time_avg = []
-    for idx, (prefix, targets, mask, meta_data) in enumerate(val_dataloader):
-        step_time_start = time.time()
+    for idx, (prefix, targets, mask, meta_data) in tqdm(enumerate(val_dataloader), total=len(val_dataloader)):
+
+        # step_time_start = time.time()
 
         if idx ==0 and eval_sample_n > 1:
             repeat_num = logits.shape[0]//targets.shape[0] 
@@ -91,7 +92,8 @@ def validation(model, val_dataloader,val_dataset, device, config):
         
         #sample entire caption
         # preds : last token's logit at every time step
-        preds, seqLogprob, tokens  = sample(max_length, prefix_embed, model, temp, sampling_method, stop_token, config, sample_n = eval_sample_n)  
+        
+        preds, seqLogprob, tokens  = sample(step_time_avg, max_length, prefix_embed, model, temp, sampling_method, stop_token, config, sample_n = eval_sample_n)
         tokens = tokens.data
     
         logits  = torch.cat((preds), dim = 1) # (B, K , vocab_size) ; K --> max_cap_length for the batch of sampled captions
@@ -155,10 +157,9 @@ def validation(model, val_dataloader,val_dataset, device, config):
 
         # if verbose:
         #     print('evaluating validation preformance... %d/%d (%f)' %(n, ix1, loss))
+        # step_time_avg.append(time.time() - step_time_start)
+        # print(f"step time avg : {np.mean(np.array(step_time_avg))}")
         break
-        step_time_avg.append(time.time() - step_time_start)
-        print(f"step time avg : {np.mean(np.array(step_time_avg))}")
-
         
 
     lang_stats = None
@@ -170,7 +171,7 @@ def validation(model, val_dataloader,val_dataset, device, config):
     # torch.save((predictions, n_predictions), os.path.join('eval_results/', '.saved_pred_'+ eval_kwargs['id'] + '_' + split + '.pth'))
     
     if lang_eval == 1:
-        lang_stats = language_eval(dataset, predictions, method)
+        lang_stats = language_eval(dataset, predictions, method, 'val')
 
     # # Switch back to training mode
     # model.train()
@@ -191,7 +192,7 @@ def validation(model, val_dataloader,val_dataset, device, config):
 #--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 
-def language_eval(dataset, preds, method, split='val'):
+def language_eval(dataset, preds, method, split):
     """
     dataset : cocotalk.json
     preds : list of 5k pred dicts {image_id, caption, perplexity, entropy}
@@ -211,16 +212,16 @@ def language_eval(dataset, preds, method, split='val'):
     cache_path = os.path.join('eval_results/', '.cache_coco' + '_' + split + '.json')
 
     coco = getCOCO(dataset) #pycocotools
-    valids = coco.getImgIds() #list of 40504 ids (test + val + restval)
+    
+    # valids = coco.getImgIds() #list of 40504 ids (test + val + restval)
 
     # consider preds only if it exists in MSCOCO validation set
-    preds_filt = [p for p in preds if p['image_id'] in valids]
+    # preds_filt = [p for p in preds if p['image_id'] in valids]
     mean_perplexity = sum([_['perplexity'] for _ in preds]) / len(preds)
     mean_entropy = sum([_['entropy'] for _ in preds]) / len(preds)
-    print('using %d/%d predictions' % (len(preds_filt), len(preds)))
+    print('using %d/%d predictions' % (len(preds), len(preds)))
     json.dump(preds, open(cache_path, 'w')) # serialize to temporary json file. Sigh, COCO API...
 
-    
     cocoRes = coco.loadRes(cache_path) #Load algorithm results and create API for accessing them.
     cocoEval = COCOEvalCap(coco, cocoRes) #
     cocoEval.params['image_id'] = cocoRes.getImgIds()
@@ -238,11 +239,11 @@ def language_eval(dataset, preds, method, split='val'):
             out['SPICE_'+k] = np.array([v['SPICE'][k]['f'] for v in imgToEval.values()])
             out['SPICE_'+k] = (out['SPICE_'+k][out['SPICE_'+k]==out['SPICE_'+k]]).mean()
 
-    for p in preds_filt:
+    for p in preds:
         image_id, caption = p['image_id'], p['caption']
         imgToEval[image_id]['caption'] = caption
 
-    out['bad_count_rate'] = sum([count_bad(_['caption']) for _ in preds_filt]) / float(len(preds_filt))
+    out['bad_count_rate'] = sum([count_bad(_['caption']) for _ in preds]) / float(len(preds))
     outfile_path = os.path.join('eval_results/', method + '_' + split + '.json')
     with open(outfile_path, 'w') as outfile:
         json.dump({'overall': out, 'imgToEval': imgToEval}, outfile)
