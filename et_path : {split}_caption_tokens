@@ -1,0 +1,63 @@
+[1mdiff --git a/data/cocodataset.py b/data/cocodataset.py[m
+[1mindex f2a4128..134ac40 100644[m
+[1m--- a/data/cocodataset.py[m
+[1m+++ b/data/cocodataset.py[m
+[36m@@ -20,7 +20,7 @@[m [mclass CocoDataset(Dataset):[m
+     def __init__(self, data_path, prefix_len,norm_prefix, split, tokenizer):[m
+         """[m
+         data_path : {model}_{split}_emb.pkl [m
+[31m-        indexed_dataset_path : {split}_caption_tokens[m
+[32m+[m[32m        indexed_dataset_path : {split}_cap2tion_tokens[m
+         """[m
+         self.data = open_pickle(data_path)[m
+         self.clip_embed = self.data['clip_embedding'][m
+[36m@@ -67,6 +67,7 @@[m [mclass CocoDataset(Dataset):[m
+         # return 400[m
+         [m
+     def pad(self, idx):[m
+[32m+[m[32m        #### this is the problem. I need diff tokenized caption.[m
+         tokens = self.tokenized_captions[idx][m
+         padding = round(float(self.max_len_token)) - tokens.shape[-1][m
+         # padding = int(self.max_len_token - tokens.shape[-1])[m
+[1mdiff --git a/train.py b/train.py[m
+[1mindex 9c326ef..afa93ae 100644[m
+[1m--- a/train.py[m
+[1m+++ b/train.py[m
+[36m@@ -19,6 +19,7 @@[m [mimport logging[m
+ import yaml[m
+ import wandb[m
+ import time[m
+[32m+[m[32mimport random[m
+ import evaluate[m
+ from utils.helper_functions import *#open_pickle, dump_pickle, save_model, Summary, AverageMeter, Metrics,int2mil[m
+ from data.cocodataset import *[m
+[36m@@ -26,6 +27,8 @@[m [mfrom utils.eval_utils import validation, language_eval[m
+ from utils.train_algos import LMCriterion, SCST[m
+ from utils.rewards import init_scorer[m
+ TRAIN = True[m
+[32m+[m[32mtorch.manual_seed(0)[m
+[32m+[m[32mrandom.seed(0)[m
+ [m
+ [m
+ def train(model, config):[m
+[36m@@ -213,7 +216,7 @@[m [mdef sweep_agent_manager():[m
+     trigger_training(config)[m
+ [m
+ def get_config():[m
+[31m-    with open('/home2/manugaur/img_cap_self_retrieval/configs/clip_cap.yml') as f:[m
+[32m+[m[32m    with open('./configs/clip_cap.yml') as f:[m
+         config = yaml.load(f,Loader=yaml.FullLoader)[m
+     [m
+     set_data_dir(config)[m
+[1mdiff --git a/utils/train_algos.py b/utils/train_algos.py[m
+[1mindex fc7e599..9f16ae9 100644[m
+[1m--- a/utils/train_algos.py[m
+[1m+++ b/utils/train_algos.py[m
+[36m@@ -35,6 +35,7 @@[m [mdef SCST(model,prefix, targets, mask,max_length, stop_token, config, step_time_a[m
+     # print(f"sample_n {config['train_sample_n']} : {np.mean(np.array(step_time_avg))}")[m
+ [m
+     #array of 5 GTs for each sample in batch[m
+[32m+[m[32m    import ipdb;ipdb.set_trace()[m
+     gts = [i for i in targets.cpu().numpy()[:, np.newaxis]]          [m
+     out = {}                [m
+     # R(c,I) -b : (sample_n* B, max_len)  --> each word in image I gets same reward.[m
