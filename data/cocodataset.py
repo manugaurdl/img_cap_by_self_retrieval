@@ -8,6 +8,8 @@ from utils.helper_functions import open_pickle, dump_pickle, save_model
 from transformers import GPT2Tokenizer, GPT2LMHeadModel, AdamW, get_linear_schedule_with_warmup
 from models.clipcap import Model
 from models.transformer import *
+from tqdm import tqdm
+
 
 class CocoDataset(Dataset):
     """
@@ -28,7 +30,6 @@ class CocoDataset(Dataset):
         self.cocoids = self.data['cocoid']
         self.filenames = self.data['filename']
         self.sent_ids = self.data['sent_id']
-        
 
         self.tokenizer = GPT2Tokenizer.from_pretrained(tokenizer)
         self.prefix_len = prefix_len
@@ -38,21 +39,22 @@ class CocoDataset(Dataset):
         #dataset needs to be arranged so a given 'idx' --> clip_embed of image, tokenized caption.
         # cannot tokenize everytime. Too expensive.
         
-        self.indexed_dataset_path = os.path.join(data_path.split('/img_cap_self_retrieval_clip/data')[0],f'img_cap_self_retrieval_clip/data/{self.split}_caption_tokens.pkl')
+        self.indexed_dataset_path = os.path.join(data_path.split('/img_cap_self_retrieval_clip/data')[0],f'img_cap_self_retrieval_clip/data/new_{self.split}_caption_tokens.pkl')
         if os.path.isfile(self.indexed_dataset_path):
             print(f"loading {self.split} data.... ")
             self.tokenized_captions, self.max_len_token = open_pickle(self.indexed_dataset_path)
+            print(True)
         else:
             #using a given idx, we can access the clip embedding and its corresponding tokenized caption 
             print(f"tokenizing {self.split} captions")
-            self.tokenized_captions = []
+            self.tokenized_captions = [] # list of list of captions 
             token_len_list = []
 
-            for caption in self.captions:
-                
-                tokens = torch.tensor(self.tokenizer.encode(caption),dtype=torch.int)
+            for caption in tqdm(self.captions, total = len(self.captions)): 
+                #caption : list of 5 cap for given cocoid
+                tokens = [torch.tensor(self.tokenizer.encode(cap),dtype=torch.int) for cap in caption]
                 self.tokenized_captions.append(tokens)
-                token_len_list.append(tokens.shape[-1])
+                token_len_list.append(np.max(np.array([token.shape[-1] for token in tokens])))
             
             all_len = torch.tensor(token_len_list, dtype = torch.float)
             #max = 182
@@ -67,11 +69,9 @@ class CocoDataset(Dataset):
         return len(self.data['clip_embedding'])
         # return 400
         
-    def pad(self, idx):
-        #### this is the problem. I need diff tokenized caption.
-        tokens = self.tokenized_captions[idx]
+    def pad(self, idx, cap_idx, tokens):
+                     
         padding = round(float(self.max_len_token)) - tokens.shape[-1]
-        # padding = int(self.max_len_token - tokens.shape[-1])
 
         if padding>0:
             pad = torch.zeros(padding)
@@ -80,28 +80,62 @@ class CocoDataset(Dataset):
             tokens = torch.cat((tokens, pad)).int()
 
             ### padded tokens replace the tokens. Here the padding is done by -1. But the tokens returned by the method have padding with 0.
-            self.tokenized_captions[idx] = tokens
+            self.tokenized_captions[idx][cap_idx] = tokens
         else:
+            # if caption > max_len, truncate it 
             tokens = tokens[:round(float(self.max_len_token))]
-            self.tokenized_captions[idx] = tokens
+            self.tokenized_captions[idx][cap_idx] = tokens
+            
         mask = tokens.ge(0)
         tokens[~mask] =0
         mask = torch.cat((torch.ones(self.prefix_len),mask))
         
-        return tokens, mask
+        return (tokens, mask)
 
 
     def __getitem__(self, idx): 
         
-        padded_tokens, mask = self.pad(idx)
+        padded_tokens, mask =  zip(*[self.pad(idx, cap_idx, tokens) for cap_idx, tokens in enumerate(self.tokenized_captions[idx])])   # list of 5 tokenized captions
+        padded_tokens = torch.stack((padded_tokens),dim=0)
+        mask = torch.stack((mask),dim=0)
         prefix = self.clip_embed[idx]
         # meta data
         cocoid = self.cocoids[idx] 
         filename = self.filenames[idx]
         sent_id = self.sent_ids[idx]
+        untokenized_cap = self.captions[idx]
 
         if self.norm_prefix:
             prefix = prefix.float()
             prefix = prefix/prefix.norm(2,-1) # L2 norm along the last dimension
         
-        return prefix, padded_tokens, mask, {"cocoid" : cocoid, "filename" : filename, "sent_id" : sent_id}
+        return prefix, padded_tokens, mask, untokenized_cap, {"cocoid" : cocoid, "filename" : filename, "sent_id" : sent_id}
+
+
+# # return (x,y1)....(x,y2)
+# def mle_collate(batch):
+#     """
+#     batch = list of bsz
+#     batch[0] = tuple of len 5
+
+    
+#     """
+#     #(x,[y1,y2,y3]) --> (x,y1)...(x,y2)
+
+#     new_batch = [] #add items to it
+
+#     for i in range(batch[0][1].shape[0]):
+        
+#         x = list(batch[0]).copy()  # batch item created. 
+        
+#         #Everything preserved except tokens, mask, sent_id in meta_data.
+
+#         x[1] = x[1][i,:] #tokens
+#         x[2] = x[2][i,:] # mask
+#         copy_dict = x[4].copy()
+#         x[4]['sent_id']= copy_dict['sent_id'][i] # dict
+#         new_batch.append(x)
+
+#     print(True)
+    
+#     return batch

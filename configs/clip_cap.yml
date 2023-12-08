@@ -1,6 +1,6 @@
 #static variables
 gpu_id: 0
-jatayu : True
+jatayu : False
 
 # Hyperparams
 lr : 2e-5
@@ -8,7 +8,8 @@ optimizer: "AdamW"
 num_epochs: 10
 prefix_length : 10
 prefix_dim : 512
-batch_size : 156
+batch_size : 6
+mle_bsz : 8
 num_layers : 6
 attn_heads : 8
 
@@ -18,17 +19,6 @@ warmup_steps : 5000
 tokenizer : "gpt2"
 train_method : "mle" # ['mle', 'scst']
 log_train_metrics : False
-
-#Sampling 
-entry_count : 1
-max_length : 67  # maximum number of words
-top_p : 0.8
-temp : 1
-stop_token : '.'
-method : "clip_cap"
-lang_eval : 1
-sampling_method : "sample"
-eval_sample_n : 1
 
 #Boolean variables
 logging : False
@@ -55,10 +45,21 @@ cider_reward_weight : 1
 bleu_reward_weight : 0
 cached_tokens : 'coco-train-idxs'
 
+#Sampling 
+entry_count : 1
+max_length : 67  # maximum number of words
+top_p : 0.8
+temp : 1
+stop_token : '.'
+method : "clip_cap"
+lang_eval : 1
+sampling_method : "sample"
+eval_sample_n : 1
+init_val : True
 
 # Path variables
-train_data : 'img_cap_self_retrieval_clip/data/train_cocodataset.pkl'
-val_data : 'img_cap_self_retrieval_clip/data/val_cocodataset.pkl'
-test_data : 'img_cap_self_retrieval_clip/data/test_cocodataset.pkl'
+train_data : 'img_cap_self_retrieval_clip/data/new_train_cocodataset.pkl'
+val_data : 'img_cap_self_retrieval_clip/data/new_val_cocodataset.pkl'
+test_data : 'img_cap_self_retrieval_clip/data/new_test_cocodataset.pkl'
 out_dir : 'img_cap_self_retrieval_clip/checkpoints/clip_ViT-B_32/'
 cocotalk : 'img_cap_self_retrieval_clip/data/cocotalk.json'

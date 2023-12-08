@@ -73,7 +73,8 @@ def validation(model, val_dataloader,val_dataset, device, config):
     # for idx, (prefix, targets, mask) in tqdm(enumerate(val_dataloader), total=len(val_dataloader)):
     
     step_time_avg = []
-    for idx, (prefix, targets, mask, meta_data) in tqdm(enumerate(val_dataloader), total=len(val_dataloader)):
+    
+    for idx, (prefix, targets, mask, untokenized_cap, meta_data) in tqdm(enumerate(val_dataloader), total=len(val_dataloader)):
         # step_time_start = time.time()
 
         if idx ==0 and eval_sample_n > 1:

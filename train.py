@@ -26,6 +26,7 @@ from data.cocodataset import *
 from utils.eval_utils import validation, language_eval
 from utils.train_algos import LMCriterion, SCST
 from utils.rewards import init_scorer
+
 TRAIN = True
 torch.manual_seed(0)
 random.seed(0)
@@ -39,6 +40,9 @@ def train(model, config):
     metric_max = 0
     device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
     batch_size = config['batch_size']
+    train_bsz = config['batch_size']
+    if config['train_method']=='mle':
+        train_bsz = config['mle_bsz']
     epochs = config['num_epochs']
     output_dir = config['out_dir'] 
     if not os.path.exists(output_dir):
@@ -52,9 +56,10 @@ def train(model, config):
     optimizer = AdamW(model.parameters(), lr=float(config['lr']))
 
     # Dataloaders
+    
     if TRAIN:
         train_dataset = CocoDataset(config['train_data'], config['prefix_length'],config['normalize_prefix'], 'train', config['tokenizer'])
-        train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers = 4)
+        train_dataloader = DataLoader(train_dataset, batch_size=train_bsz, shuffle=True, drop_last=True, num_workers = 4)
 
     val_dataset = CocoDataset(config['val_data'], config['prefix_length'],config['normalize_prefix'],'val', config['tokenizer'])
     val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
@@ -74,16 +79,17 @@ def train(model, config):
     step = 1
 
     # Validation loss before epoch 1
+    if config['init_val']:
+        val_loss_meter, val_lang_stats = validation(model, val_dataloader,val_dataset, device, config)
     
-    val_loss_meter, val_lang_stats = validation(model, val_dataloader,val_dataset, device, config)
-   
-   #"val_loss_avg": val_loss_meter.avg,
-    val_log = {"val_CIDEr" : val_lang_stats["CIDEr"],
-            "val_SPICE" : val_lang_stats["SPICE"]
-                            }
-    if config['logging']: 
-        wandb.log(val_log, step = step)
-    print(val_log)
+    "val_loss_avg": val_loss_meter.avg,
+        val_log = {"val_CIDEr" : val_lang_stats["CIDEr"],
+                "val_SPICE" : val_lang_stats["SPICE"]
+                                }
+        if config['logging']: 
+            wandb.log(val_log, step = step)
+        # print(val_log)
+
 
     if config['train_method'] == 'scst':
         init_scorer(config['cached_tokens'])
@@ -103,18 +109,22 @@ def train(model, config):
         predictions = [] # coco
         step_time_avg = []
 
-        for idx, (prefix, targets, mask, meta_data) in tqdm(enumerate(train_dataloader), total=len(train_dataloader)):
+        for idx, (prefix, targets, mask, untokenized_cap, meta_data) in tqdm(enumerate(train_dataloader), total=len(train_dataloader)):
             # if idx == 100:
             #     break
             # step_time_start = time.time()
 
             model.zero_grad()
-            optimizer.zero_grad()
+            optimizer.zero_grad()            
+            targets = targets.view(-1, targets.shape[-1])
+            mask = mask.view(-1, mask.shape[-1])
+
+            prefix = repeat_tensors(targets.shape[0]//prefix.shape[0],prefix)
 
             targets, mask, prefix = targets.to(device), mask.to(device), prefix.to(device, dtype=torch.float32) # (B,41), (B,51), (B,1024/512)
             
             if config['train_method'] == 'mle':
-                loss, preds, entropy, perplexity = LMCriterion(model, prefix,targets, mask, meta_data, prefix_len)
+                loss, preds, entropy, perplexity = LMCriterion(model, prefix, targets, mask, meta_data, prefix_len)
                 
                 # Decode batch preds and add it to coco_predictions list
                 if config['log_train_metrics'] :  
@@ -188,7 +198,7 @@ def train(model, config):
         if config['logging'] and config['save_best_metric']:
                 if val_lang_stats["CIDEr"] > metric_max:
                     metric_max  = val_lang_stats["CIDEr"]
-                    save_model(output_dir,f'{model_name}_epoch_{epoch+1}',model)
+                    save_model(output_dir,f'{model_name}_best_cider',model)
                     
         elif config['logging'] and config['save_every_epoch']:
             save_model(output_dir,f'{epoch+1}',model)
