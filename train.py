@@ -19,6 +19,7 @@ import logging
 import yaml
 import wandb
 import time
+import random
 import evaluate
 from utils.helper_functions import *#open_pickle, dump_pickle, save_model, Summary, AverageMeter, Metrics,int2mil
 from data.cocodataset import *
@@ -26,6 +27,8 @@ from utils.eval_utils import validation, language_eval
 from utils.train_algos import LMCriterion, SCST
 from utils.rewards import init_scorer
 TRAIN = True
+torch.manual_seed(0)
+random.seed(0)
 
 
 def train(model, config):
@@ -213,7 +216,7 @@ def sweep_agent_manager():
     trigger_training(config)
 
 def get_config():
-    with open('/home2/manugaur/img_cap_self_retrieval/configs/clip_cap.yml') as f:
+    with open('./configs/clip_cap.yml') as f:
         config = yaml.load(f,Loader=yaml.FullLoader)
     
     set_data_dir(config)

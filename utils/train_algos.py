@@ -35,6 +35,7 @@ def SCST(model,prefix, targets, mask,max_length, stop_token, config, step_time_a
     # print(f"sample_n {config['train_sample_n']} : {np.mean(np.array(step_time_avg))}")
 
     #array of 5 GTs for each sample in batch
+    import ipdb;ipdb.set_trace()
     gts = [i for i in targets.cpu().numpy()[:, np.newaxis]]          
     out = {}                
     # R(c,I) -b : (sample_n* B, max_len)  --> each word in image I gets same reward.
