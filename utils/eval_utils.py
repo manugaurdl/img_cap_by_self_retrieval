@@ -11,14 +11,10 @@ import os
 import sys
 from tqdm import tqdm 
 from utils.helper_functions import *
-
 # load coco-caption if available
-try:
-    sys.path.append("coco-caption")
-    from pycocotools.coco import COCO
-    from pycocoevalcap.eval import COCOEvalCap
-except Exception as e:
-    print('Warning: coco-caption not available. Error meesage:', e)
+sys.path.append("coco-caption")
+from pycocotools.coco import COCO
+from pycocoevalcap.eval import COCOEvalCap
 
 
 bad_endings = ['a','an','the','in','for','at','of','with','before','after','on','upon','near','to','is','are','am']
@@ -78,13 +74,12 @@ def validation(model, val_dataloader,val_dataset, device, config):
     
     step_time_avg = []
     for idx, (prefix, targets, mask, meta_data) in tqdm(enumerate(val_dataloader), total=len(val_dataloader)):
-
         # step_time_start = time.time()
 
         if idx ==0 and eval_sample_n > 1:
             repeat_num = logits.shape[0]//targets.shape[0] 
 
-        print(f'sampled batch no.{idx} in val dataloader')
+        # print(f'sampled batch no.{idx} in val dataloader')
         # meta_data --> cocoid, filename, sentence_id
         targets, mask, prefix = targets.to(device), mask.to(device), prefix.to(device, dtype=torch.float32)
         #get the class idx for each instance in the batch.
@@ -158,12 +153,9 @@ def validation(model, val_dataloader,val_dataset, device, config):
         # if verbose:
         #     print('evaluating validation preformance... %d/%d (%f)' %(n, ix1, loss))
         # step_time_avg.append(time.time() - step_time_start)
-        # print(f"step time avg : {np.mean(np.array(step_time_avg))}")
-        break
-        
+        # print(f"step time avg : {np.mean(np.array(step_time_avg))}")        
 
     lang_stats = None
-
     # #What are we saving
 
     # if not os.path.isdir('eval_results'):
@@ -219,7 +211,7 @@ def language_eval(dataset, preds, method, split):
     # preds_filt = [p for p in preds if p['image_id'] in valids]
     mean_perplexity = sum([_['perplexity'] for _ in preds]) / len(preds)
     mean_entropy = sum([_['entropy'] for _ in preds]) / len(preds)
-    print('using %d/%d predictions' % (len(preds), len(preds)))
+    # print('using %d/%d predictions' % (len(preds), len(preds)))
     json.dump(preds, open(cache_path, 'w')) # serialize to temporary json file. Sigh, COCO API...
 
     cocoRes = coco.loadRes(cache_path) #Load algorithm results and create API for accessing them.

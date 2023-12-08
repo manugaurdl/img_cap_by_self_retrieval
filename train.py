@@ -100,8 +100,9 @@ def train(model, config):
         predictions = [] # coco
         step_time_avg = []
 
-        for idx, (prefix, targets, mask, meta_data) in enumerate(train_dataloader):
-
+        for idx, (prefix, targets, mask, meta_data) in tqdm(enumerate(train_dataloader), total=len(train_dataloader)):
+            # if idx == 100:
+            #     break
             # step_time_start = time.time()
 
             model.zero_grad()
@@ -125,7 +126,6 @@ def train(model, config):
                     epoch_train_decoded_cap.extend(decoded_cap)
 
             else:
-
                 reward, loss = SCST(model, prefix, targets, mask, max_length, stop_token, config,step_time_avg)
                 
             # accumulating loss
@@ -213,7 +213,7 @@ def sweep_agent_manager():
     trigger_training(config)
 
 def get_config():
-    with open('/home2/manugaur/img_cap_self_retrieval/configs/clip_cap.yml') as f:
+    with open('./configs/clip_cap.yml') as f:
         config = yaml.load(f,Loader=yaml.FullLoader)
     
     set_data_dir(config)
