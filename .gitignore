@@ -12,6 +12,4 @@ wandb/
 config_siglip.yml
 data/coco-train-idxs.p
 data/coco-train-words.p
-eval_results/.cache_coco_val.json
-eval_results/clip_cap_val.json
 data/img_cap_self_retrieval_clip/
