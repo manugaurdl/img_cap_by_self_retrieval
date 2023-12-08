@@ -20,7 +20,7 @@ class CocoDataset(Dataset):
     def __init__(self, data_path, prefix_len,norm_prefix, split, tokenizer):
         """
         data_path : {model}_{split}_emb.pkl 
-        indexed_dataset_path : {split}_caption_tokens
+        indexed_dataset_path : {split}_cap2tion_tokens
         """
         self.data = open_pickle(data_path)
         self.clip_embed = self.data['clip_embedding']
@@ -68,6 +68,7 @@ class CocoDataset(Dataset):
         # return 400
         
     def pad(self, idx):
+        #### this is the problem. I need diff tokenized caption.
         tokens = self.tokenized_captions[idx]
         padding = round(float(self.max_len_token)) - tokens.shape[-1]
         # padding = int(self.max_len_token - tokens.shape[-1])
