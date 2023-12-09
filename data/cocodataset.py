@@ -38,8 +38,7 @@ class CocoDataset(Dataset):
 
         #dataset needs to be arranged so a given 'idx' --> clip_embed of image, tokenized caption.
         # cannot tokenize everytime. Too expensive.
-        
-        self.indexed_dataset_path = os.path.join(data_path.split('/img_cap_self_retrieval_clip/data')[0],f'img_cap_self_retrieval_clip/data/new_{self.split}_caption_tokens.pkl')
+        self.indexed_dataset_path = os.path.join(data_path.split('/new')[0],f'new_{self.split}_caption_tokens.pkl')
         if os.path.isfile(self.indexed_dataset_path):
             print(f"loading {self.split} data.... ")
             self.tokenized_captions, self.max_len_token = open_pickle(self.indexed_dataset_path)

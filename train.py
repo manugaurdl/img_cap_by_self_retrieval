@@ -82,7 +82,7 @@ def train(model, config):
     if config['init_val']:
         val_loss_meter, val_lang_stats = validation(model, val_dataloader,val_dataset, device, config)
     
-    "val_loss_avg": val_loss_meter.avg,
+    #### "val_loss_avg": val_loss_meter.avg,
         val_log = {"val_CIDEr" : val_lang_stats["CIDEr"],
                 "val_SPICE" : val_lang_stats["SPICE"]
                                 }

@@ -15,4 +15,5 @@ data/coco-train-words.p
 eval_results/.cache_coco_val.json
 eval_results/
 eval_results/clip_cap_val.json
+data
 data/img_cap_self_retrieval_clip/
