@@ -7,7 +7,7 @@ from utils.eval_utils import *
 from utils.losses import * 
 
 
-def SCST(model,prefix, targets, mask,max_length, stop_token, config, step_time_avg):
+def SCST(model,prefix, targets, mask,max_length, stop_token, tokenizer, config):
     
     model.eval()
     with torch.no_grad():
@@ -15,31 +15,35 @@ def SCST(model,prefix, targets, mask,max_length, stop_token, config, step_time_a
         # greedy caption used only for self critical reward
 
         # T1 = time.time()
+        _, _, greedy_cap  = sample(max_length, prefix_embed, model, config['temp'], "greedy", stop_token,tokenizer, config)
 
-        _, _, greedy_cap  = sample(step_time_avg, max_length, prefix_embed, model, config['temp'], "greedy", stop_token, config)  
-
+        # _, policy_seqLogprob, policy_cap = sample(max_length, prefix_embed, model, config['temp'], "greedy", stop_token,tokenizer, config)
         # step_time_avg.append(time.time() - T1)
         # print(len(step_time_avg))
         # print(f"bsz {config['batch_size']} sample_n {config['train_sample_n']} : {np.mean(np.array(step_time_avg))}")
 
 
     model.train()
-
+    if config['freeze_gpt']:
+        model.gpt.eval()
     #trainable policy 
     # T1 = time.time()
-    
-    _, policy_seqLogprob, policy_cap = sample(step_time_avg, max_length, prefix_embed, model, config['temp'], "sample", stop_token, config, sample_n = config['train_sample_n'])  # don't need logits (dist over all words). Have log prob for sampled word
-    
+    _, policy_seqLogprob, policy_cap = sample(max_length, prefix_embed, model, config['temp'], "sample", stop_token, tokenizer,config, sample_n = config['train_sample_n'])  # don't need logits (dist over all words). Have log prob for sampled word
+    print(tokenizer.batch_decode(greedy_cap))
+    print(tokenizer.batch_decode(policy_cap))
     # step_time_avg.append(time.time() - T1)
     # print(len(step_time_avg))
     # print(f"sample_n {config['train_sample_n']} : {np.mean(np.array(step_time_avg))}")
 
-    #array of 5 GTs for each sample in batch
+    # len(gts) = bsz.
+    # For each instance in batch --> 5 target cap.
     import ipdb;ipdb.set_trace()
-    gts = [i for i in targets.cpu().numpy()[:, np.newaxis]]          
-    out = {}                
-    # R(c,I) -b : (sample_n* B, max_len)  --> each word in image I gets same reward.
-    
+
+    gts = tuple(np.split(np.array(targets.cpu()), prefix.shape[0]))
+    # gts = torch.chunk(targets.cpu(), prefix.shape[0], dim=0)
+    out = {}
+    # R(c,I) -b : (sample_n* B, max_len)  --> each generated word in for policy cap 'i' gets same reward.
+    # Per image, hence sample_n rewards.
     reward = get_self_critical_reward(greedy_cap, gts, policy_cap, config) #(n*B,40)
     # reward is moved to same device as logprobs for each sampled word for each caption.
     reward = torch.from_numpy(reward).to(policy_seqLogprob)

@@ -86,5 +86,14 @@ class Model(nn.Module):
     def parameters(self, recurse: bool = True):
         if self.freeze_gpt:
             return self.mapping_network.parameters()
+
+
         return super().parameters()
 
+# model = Model()
+# def surgery(model: Model):
+    # for layer in model.layers():
+    #   if isinstance(layer, LayerNorm):
+            # layer.requires_grad = False
+
+    # return model

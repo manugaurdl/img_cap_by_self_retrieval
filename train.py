@@ -41,40 +41,54 @@ def train(model, config):
     device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
     batch_size = config['batch_size']
     train_bsz = config['batch_size']
-    if config['train_method']=='mle':
-        train_bsz = config['mle_bsz']
     epochs = config['num_epochs']
     output_dir = config['out_dir'] 
+
+    if config['train_method']=='mle':
+        train_bsz = config['mle_bsz']
+        optimizer = AdamW(model.parameters(), lr=float(config['lr']))
+
+    else:
+        load_model(model, output_dir,f'clip_mle_best_cider')
+        optimizer = AdamW(model.parameters(), lr=float(2e-5))
+        init_scorer(config['cached_tokens'])
+
+    
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
+    #load pretrained model if scst
+
     model = model.to(device)
     model.train()
     if config['freeze_gpt']:
         model.gpt.eval()
     
     loss_meter = AverageMeter("train_loss", ":.5f")
-    optimizer = AdamW(model.parameters(), lr=float(config['lr']))
 
     # Dataloaders
     
     if TRAIN:
         train_dataset = CocoDataset(config['train_data'], config['prefix_length'],config['normalize_prefix'], 'train', config['tokenizer'])
         train_dataloader = DataLoader(train_dataset, batch_size=train_bsz, shuffle=True, drop_last=True, num_workers = 4)
+        
+        if config['train_method']=="mle":
+            scheduler = get_linear_schedule_with_warmup(
+                optimizer, num_warmup_steps=config['warmup_steps'], num_training_steps=epochs* len(train_dataloader))
+        else:
+            scheduler = get_linear_schedule_with_warmup(
+                optimizer, num_warmup_steps=0, num_training_steps=epochs* len(train_dataloader))
+  
+
 
     val_dataset = CocoDataset(config['val_data'], config['prefix_length'],config['normalize_prefix'],'val', config['tokenizer'])
     val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
     test_dataset = CocoDataset(config['test_data'], config['prefix_length'],config['normalize_prefix'],'test', config['tokenizer'])
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
-    
     tokenizer = val_dataset.tokenizer
     prefix_len = val_dataset.prefix_len
     max_length = val_dataset.max_len_token
     temp = config['temp']
     stop_token =  tokenizer.encode(config['stop_token'])[0]
-    
-    if TRAIN: 
-        scheduler = get_linear_schedule_with_warmup(
-            optimizer, num_warmup_steps=config['warmup_steps'], num_training_steps=epochs* len(train_dataloader))
 
     step = 1
 
@@ -88,12 +102,7 @@ def train(model, config):
                                 }
         if config['logging']: 
             wandb.log(val_log, step = step)
-        # print(val_log)
-
-
-    if config['train_method'] == 'scst':
-        init_scorer(config['cached_tokens'])
-
+        print(val_log)
 
     for epoch in range(epochs):
         
@@ -118,12 +127,11 @@ def train(model, config):
             optimizer.zero_grad()            
             targets = targets.view(-1, targets.shape[-1])
             mask = mask.view(-1, mask.shape[-1])
-
-            prefix = repeat_tensors(targets.shape[0]//prefix.shape[0],prefix)
-
-            targets, mask, prefix = targets.to(device), mask.to(device), prefix.to(device, dtype=torch.float32) # (B,41), (B,51), (B,1024/512)
             
+            targets, mask, prefix = targets.to(device), mask.to(device), prefix.to(device, dtype=torch.float32) # (B,41), (B,51), (B,1024/512)
+
             if config['train_method'] == 'mle':
+                prefix = repeat_tensors(targets.shape[0]//prefix.shape[0],prefix)
                 loss, preds, entropy, perplexity = LMCriterion(model, prefix, targets, mask, meta_data, prefix_len)
                 
                 # Decode batch preds and add it to coco_predictions list
@@ -139,7 +147,7 @@ def train(model, config):
                     epoch_train_decoded_cap.extend(decoded_cap)
 
             else:
-                reward, loss = SCST(model, prefix, targets, mask, max_length, stop_token, config,step_time_avg)
+                reward, loss = SCST(model, prefix, targets, mask, max_length, stop_token,tokenizer, config)
                 
             # accumulating loss
             epoch_train_losses.append(loss.item())

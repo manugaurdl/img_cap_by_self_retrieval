@@ -53,11 +53,10 @@ class CocoDataset(Dataset):
                 #caption : list of 5 cap for given cocoid
                 tokens = [torch.tensor(self.tokenizer.encode(cap),dtype=torch.int) for cap in caption]
                 self.tokenized_captions.append(tokens)
-                token_len_list.append(np.max(np.array([token.shape[-1] for token in tokens])))
+                token_len_list.extend([token.shape[-1] for token in tokens])
             
             all_len = torch.tensor(token_len_list, dtype = torch.float)
             #max = 182
-            
             self.max_len_token = min(all_len.mean() + 10*(all_len.std()), all_len.max())
 
             dump_pickle((self.tokenized_captions, self.max_len_token), self.indexed_dataset_path)

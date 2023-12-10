@@ -76,6 +76,10 @@ def save_model(output_dir, model_name, model):
     os.path.join(output_dir, f'{model_name}.pt'),
 )
 
+def load_model(model, output_dir, model_name):
+    path = os.path.join(output_dir, f'{model_name}.pt')
+    model.load_state_dict(torch.load(path))
+
 def int2mil(number):
     if abs(number) >= 1_000_000:
         formatted_number = "{:.1f}M".format(number / 1_000_000)

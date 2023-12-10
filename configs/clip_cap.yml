@@ -1,8 +1,10 @@
 #dynamic variables
 jatayu : True
-batch_size : 6 #val:90s
-mle_bsz : 8
-train_method : "mle" # ['mle', 'scst']
+batch_size : 2
+mle_bsz : 4
+train_method : "scst" # ['mle', 'scst']
+init_val : False
+train_sample_n : 5
 
 # Hyperparams
 lr : 2e-5
@@ -18,7 +20,7 @@ warmup_steps : 5000
 log_train_metrics : False
 
 #Boolean variables
-logging : True
+logging : False
 save_every_epoch : False
 save_best_val : False
 save_best_metric : True
@@ -31,11 +33,10 @@ wandb :
   sweep_run_count : 100
   entity : "manugaur"
   project : "img_cap_self_retrieval"
-  run_name : "clip_mle"
-
+  run_name : "clip_scst"
 
 #scst
-train_sample_n : 2
+
 cider_reward_weight : 1
 bleu_reward_weight : 0
 cached_tokens : 'coco-train-idxs'
@@ -44,7 +45,6 @@ cached_tokens : 'coco-train-idxs'
 method : "clip_cap"
 sampling_method : "sample"
 eval_sample_n : 1
-init_val : True
 
 # Path variables
 train_data : 'data/new_train_cocodataset.pkl'

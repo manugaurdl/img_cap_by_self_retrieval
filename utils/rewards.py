@@ -36,43 +36,72 @@ def array_to_str(arr):
     return out.strip()
 
 def get_self_critical_reward(greedy_res, data_gts, gen_result,config):
-    #greedy_res : B,20
-    #gen_res : n_sample* B, 20
+
+    #greedy_res : B cap
+    #gen_res : sample_n * B cap
     cider_reward_weight = config['cider_reward_weight']
     bleu_reward_weight = config['bleu_reward_weight']
     batch_size = len(data_gts) 
-    gen_result_size = gen_result.shape[0] # bsz * 5 captions per image
-    seq_per_img = gen_result_size // len(data_gts) # gen_result_size  = batch_size * seq_per_img
+    gen_result_size = gen_result.shape[0] # no. of policy captions = bsz * 5 cap
+    seq_per_img = gen_result_size // len(data_gts) #sample_n
     assert greedy_res.shape[0] == batch_size
 
     res = OrderedDict()
     gen_result = gen_result.data.cpu().numpy()
     greedy_res = greedy_res.data.cpu().numpy()
 
-    # res : dict of len = B + n*B
-    # it has tokenized caption in str
+    # res : dict of len = B + sample_n * B --> str(tokenized_cap)
 
+    #iterate over B *sample_n policy cap 
     for i in range(gen_result_size):
         res[i] = [array_to_str(gen_result[i])]
+    
+    #iterate over B greedy cap        
     for i in range(batch_size):
         res[gen_result_size + i] = [array_to_str(greedy_res[i])]
     
     gts = OrderedDict()
 
+    #data_gts : tuple ; len = bsz ; has 5 GTs for each image.
+    
+    # iterate bsz
     for i in range(len(data_gts)):
+        # for each img, iterate 5 gts.
         gts[i] = [array_to_str(data_gts[i][j]) for j in range(len(data_gts[i]))]
 
-    # For batch_size = 1, res_ is a list of 6 image_ids : caption. (5 for REINFORCE, 1 for MLE)
-    res_ = [{'image_id':i, 'caption': res[i]} for i in range(len(res))] # list of dicts
-    res__ = {i: res[i] for i in range(len(res_))}  # same as res, but a dict (img_id : caption)
+    #res_ : list of dicts | number of dicts = (total policy + greedy caps) i.e (sample_n * B + B)
+    #res_ created from res.
+    #So, First B*sample_n image_ids--> policy captions
+    # Last B image_ids -->  greedy captions
+    # For bsz = 3 and sample_n = 5 : image_id = 6 is second policy cap of 2nd image and image_id = 17 is greedy cap of 2nd image.
+    res_ = [{'image_id':i, 'caption': res[i]} for i in range(len(res))]
+    res__ = {i: res[i] for i in range(len(res_))}  # same as res_, but a dict (img_id : caption)
 
-    # For bsz = 3 ; total captions = 18 --> 5 policy + 1 greedy  for each image
-
-    gts_ = {i: gts[i // seq_per_img] for i in range(gen_result_size)} # index 1 to 5 --> 1st image's [5 captions], index 5 to 10 : 2nd image's [5 captions]
-    gts_.update({i+gen_result_size: gts[i] for i in range(batch_size)}) # index 16 : 1st image's [5 captions].... index 18 :  3rd image's [5 captions]
+    """
+    In gts_, each index correspond to [5 gts] for a given image i
+    For bsz = 3, sample_n = 5
+    gts_ = [i_1,i_1,i_1,i_1,i_1, i_2,i_2,i_2,i_2,i_2, i_3,i_3,i_3,i_3,i_3,  i_1,  i_2,  i_3]
+    same structure for res. But first sample_n * B --> policy cap. Last B --> greedy cap.
+    """
+    gts_ = {i: gts[i // seq_per_img] for i in range(gen_result_size)} # index 1 to 5 --> 1st image's [5 gts], index 5 to 10 : 2nd image's [5 gts]
+    gts_.update({i+gen_result_size: gts[i] for i in range(batch_size)}) # index 16 : 1st image's [5 gts].... index 17 :  2rd image's [5 gts]
     
     # reward weight is 1 
 
+    """
+    For index i :
+        pred = A tokenized caption : str
+        target = 5 gt caption for that image.
+    
+    
+    currently,  gts_ : dict of len B * sample_n + B 
+                gts_[0] : list of 5 gt for given image.
+                gts_[0][0] : 
+
+                res_ : ordered dict of len =  B * sample_n + B 
+                res_[0] : generated cap for that image.
+    
+    """
     if cider_reward_weight > 0:
         _, cider_scores = CiderD_scorer.compute_score(gts_, res_)
     else:
@@ -83,15 +112,26 @@ def get_self_critical_reward(greedy_res, data_gts, gen_result,config):
         bleu_scores = np.array(bleu_scores[3])
     else:
         bleu_scores = 0
-    scores = cider_reward_weight * cider_scores + bleu_reward_weight * bleu_scores
-    # select CIDER scores for policy generated caption and reshape it to (B,seq_per_img) - select CIDER reward for greedy method i.e last B scores.
-    # scores before: (12,), bsz =2
-    # --> scores (2,5) =  (2,5) - (2,1)
 
-    # for each image : CIDEr(policy) - CIDEr(greedy) for each policy generated caption
+    scores = cider_reward_weight * cider_scores + bleu_reward_weight * bleu_scores
+    """
+    For each img :  Take reward for policy cap. Rescale it using reward for greedy cap.
+    scores before: (12,), bsz =2
+
+    for each image : CIDEr(policy) - CIDEr(greedy).
+    scores (2,5) =      (2,5) -           (2,1)
+    greedy cap broadcasted and subtracted from each policy cap
+    """
     scores = scores[:gen_result_size].reshape(batch_size, seq_per_img) - scores[-batch_size:][:, np.newaxis]
+
+    # flatten the scaled reward for all policy cap.   
     scores = scores.reshape(gen_result_size)
-    #scores = (10,)
+    
+    """
+    scores[i] --> reward for policy cap for image i//sample_n.
+    logprob of each generated word given same reward. 
+    (B* sample_n, 1) rewards --> (B * sample_n, 40)
+    """
     rewards = np.repeat(scores[:, np.newaxis], gen_result.shape[1], 1)
 
     return rewards

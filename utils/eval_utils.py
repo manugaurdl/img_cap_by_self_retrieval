@@ -88,8 +88,7 @@ def validation(model, val_dataloader,val_dataset, device, config):
         
         #sample entire caption
         # preds : last token's logit at every time step
-        
-        preds, seqLogprob, tokens  = sample(step_time_avg, max_length, prefix_embed, model, temp, sampling_method, stop_token, config, sample_n = eval_sample_n)
+        preds, seqLogprob, tokens  = sample(max_length, prefix_embed, model, temp, sampling_method, stop_token, config, sample_n = eval_sample_n)
         tokens = tokens.data
     
         logits  = torch.cat((preds), dim = 1) # (B, K , vocab_size) ; K --> max_cap_length for the batch of sampled captions
@@ -246,7 +245,7 @@ def language_eval(dataset, preds, method, split):
 
 #--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-def sample(step_time_avg, max_length, token_emb, model, temp, method, stop_token, config, sample_n = None, tokens = None):
+def sample(max_length, token_emb, model, temp, method, stop_token, tokenizer, config, sample_n = None, tokens = None):
     """
     seq : sampled sequence (B, max_len)
     seqLogprobs : logprobs for sampled words
@@ -259,23 +258,18 @@ def sample(step_time_avg, max_length, token_emb, model, temp, method, stop_token
     if method == "greedy":
         sample_n = 1
     
-    preds = []
-
-    unfinished = torch.ones((token_emb.shape[0],1), dtype=torch.bool) # all are unfinished i.e True at start
-        
+    preds = []        
     # for sample_n > 1 : repeat images --> batch size increase sample_n X times 
     if method =="sample" and sample_n > 1:
-
-        unfinished = repeat_tensors(sample_n, unfinished)
         token_emb = repeat_tensors(sample_n, token_emb)
     
-
-    # if method =="sample":
-    #     import ipdb;ipdb.set_trace()
+    #     unfinished = torch.ones((token_emb.shape[0],1), dtype=torch.bool) # all are unfinished i.e True at start
+    # else:
+    #     unfinished = torch.ones((token_emb.shape[0],1), dtype=torch.bool) # all are unfinished i.e True at start
 
     # each iteration, the context on which generation is conditioned increases by 1. (prefix + gpt_outputs)
     # T1 = time.time()
-
+    
     for t in range(round(float(max_length))):
 
         outputs = model.gpt(inputs_embeds= token_emb)
@@ -294,7 +288,7 @@ def sample(step_time_avg, max_length, token_emb, model, temp, method, stop_token
         
 
         elif method == "sample":
-            probs = torch.nn.functional.softmax(logits, dim=-1) # (B, C)
+            probs = torch.nn.functional.softmax(logits.data, dim=-1) # (B, C)
             next_token = torch.multinomial(probs, num_samples=1) # (B, 1)
             sampled_logprob = logits.gather(1, next_token)
 
@@ -304,6 +298,7 @@ def sample(step_time_avg, max_length, token_emb, model, temp, method, stop_token
     
 
         if tokens is None:
+            # create a tensor of shape (B, max_len)
             tokens = next_token
             seqLogprob = sampled_logprob
         else:
@@ -312,11 +307,13 @@ def sample(step_time_avg, max_length, token_emb, model, temp, method, stop_token
         
         token_emb = torch.cat((token_emb, next_token_embed), dim=1)
         
-
-
         # if stop token reached for all images --> break
-        unfinished[torch.nonzero(next_token==stop_token)] = False
-        
+        if t ==0:
+            # True for indices where stop token is not reached.
+            unfinished = next_token != stop_token
+     
+        unfinished[torch.nonzero((next_token==stop_token).squeeze(-1)).cpu()] = False
+
 
         if sum(unfinished).item() == 0:
             break
@@ -325,7 +322,6 @@ def sample(step_time_avg, max_length, token_emb, model, temp, method, stop_token
     #     step_time_avg.append(time.time() - T1)
     #     print(len(step_time_avg))
     #     print(f"bsz {config['batch_size']} sample_n {config['train_sample_n']} : {np.mean(np.array(step_time_avg))}")
-
     return preds, seqLogprob, tokens 
 
 #--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
