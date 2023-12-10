@@ -112,7 +112,7 @@ def validation(model, val_dataloader,val_dataset, device, config):
         # loss_meter.update(loss.item(), targets.shape[0])
 
         entropy = -(F.softmax(logits, dim=2) * logits).sum(2).sum(1) / ((tokens>0).to(logits).sum(1)+1)
-        perplexity = - logits.gather(2, tokens.unsqueeze(2)).squeeze(2).sum(1) / ((tokens>0).to(logits).sum(1)+1)
+        perplexity = - logits.gather(2, tokens.unsqueeze(2).to(torch.int64)).squeeze(2).sum(1) / ((tokens>0).to(logits).sum(1)+1)
 
         # generated captions of each batch added to list --> gen captions for whole split
         # val_preds.append(tokens)
