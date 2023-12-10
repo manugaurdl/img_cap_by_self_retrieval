@@ -14,8 +14,6 @@ def Reinforce(policy_logprob, policy_cap, reward, reduction='mean'):
 
     reward : R(c,I) - b    [B * sample_n, 40] (same reward for each word in a given cap.)
     """
-    import ipdb;ipdb.set_trace()
-
     N,L = policy_logprob.shape[:2]
     # I have already gathered logprobs for sampled words.
     # input = input.gather(2, seq.unsqueeze(2)).squeeze(2)

@@ -88,7 +88,7 @@ def validation(model, val_dataloader,val_dataset, device, config):
         
         #sample entire caption
         # preds : last token's logit at every time step
-        preds, seqLogprob, tokens  = sample(max_length, prefix_embed, model, temp, sampling_method, stop_token, config, sample_n = eval_sample_n)
+        preds, seqLogprob, tokens  = sample(max_length, prefix_embed, model, temp, sampling_method, stop_token,tokenizer, config, sample_n = eval_sample_n)
         tokens = tokens.data
     
         logits  = torch.cat((preds), dim = 1) # (B, K , vocab_size) ; K --> max_cap_length for the batch of sampled captions
@@ -254,23 +254,25 @@ def sample(max_length, token_emb, model, temp, method, stop_token, tokenizer, co
 
     returns : preds (last token logit at every time step.)
     """
-
+    max_len = round(float(max_length))
     if method == "greedy":
         sample_n = 1
     
-    preds = []        
+    pred_logits = []        
     # for sample_n > 1 : repeat images --> batch size increase sample_n X times 
     if method =="sample" and sample_n > 1:
         token_emb = repeat_tensors(sample_n, token_emb)
     
-    #     unfinished = torch.ones((token_emb.shape[0],1), dtype=torch.bool) # all are unfinished i.e True at start
-    # else:
-    #     unfinished = torch.ones((token_emb.shape[0],1), dtype=torch.bool) # all are unfinished i.e True at start
-
+    #(B,40)
+    tokens = torch.zeros((token_emb.shape[0], max_len), dtype = torch.int).to(token_emb.device)
+    seqLogprob = torch.zeros((token_emb.shape[0], max_len)).to(token_emb.device)
+    
     # each iteration, the context on which generation is conditioned increases by 1. (prefix + gpt_outputs)
     # T1 = time.time()
-    
-    for t in range(round(float(max_length))):
+    for t in range(max_len):
+
+        if t == max_len:
+            break
 
         outputs = model.gpt(inputs_embeds= token_emb)
 
@@ -280,48 +282,58 @@ def sample(max_length, token_emb, model, temp, method, stop_token, tokenizer, co
         # logit of last token = next token prediction
         logits =  logits[:, -1, :]/ (temp if temp > 0 else 1.0)  # (B,vocab_size)
         # preds for timestep t
-        preds.append(logits.unsqueeze(1)) #(B,1,vocab_size)
+        pred_logits.append(logits.unsqueeze(1)) #(B,1,vocab_size)
 
         if method == "greedy":
-            sampled_logprob, next_token = torch.max(logits.data,dim = -1)
-            sampled_logprob, next_token = sampled_logprob.unsqueeze(1), next_token.unsqueeze(1)
-        
+            sampled_logprob, next_token = torch.max(logits.data,dim = -1)        
 
         elif method == "sample":
-            probs = torch.nn.functional.softmax(logits.data, dim=-1) # (B, C)
-            next_token = torch.multinomial(probs, num_samples=1) # (B, 1)
-            sampled_logprob = logits.gather(1, next_token)
+            probs = torch.nn.functional.softmax(logits.data, dim=-1) # (B, vocab_size)
+            next_token = torch.multinomial(probs, num_samples=1).squeeze(-1) # (B, 1)
+            sampled_logprob = logits.gather(1, next_token.unsqueeze(-1)).squeeze(-1)
 
-        # for the sampled token, get token embedding 
-
-        next_token_embed = model.gpt.transformer.wte(next_token) # (B,1,768)
-    
-
-        if tokens is None:
-            # create a tensor of shape (B, max_len)
-            tokens = next_token
-            seqLogprob = sampled_logprob
-        else:
-            tokens = torch.cat((tokens, next_token), dim=1)
-            seqLogprob = torch.cat((seqLogprob, sampled_logprob), dim = 1)
-        
-        token_emb = torch.cat((token_emb, next_token_embed), dim=1)
-        
-        # if stop token reached for all images --> break
         if t ==0:
             # True for indices where stop token is not reached.
             unfinished = next_token != stop_token
+        else:
+            # For instances in batch which are finished --> overwrite sampled next_token with 0.
+            next_token[~unfinished] = 0
+            sampled_logprob[~unfinished] = 0
+
+            # logprobs = logprobs * unfinished.unsqueeze(1).to(logprobs)
+
+            # zero out log probs?
+            # If stop_token reached for an idx, unfinished = False
+            unfinished = unfinished & (next_token != stop_token)        
+        
+        # t_th index  = token sampled for t_th index
+        tokens[:,t] = next_token
+        seqLogprob[:,t] = sampled_logprob
+        
+        # for the sampled token, get token embedding 
+        next_token_embed = model.gpt.transformer.wte(next_token.unsqueeze(-1)) # (B,1,768)
+        token_emb = torch.cat((token_emb, next_token_embed), dim=1)
      
-        unfinished[torch.nonzero((next_token==stop_token).squeeze(-1)).cpu()] = False
-
-
-        if sum(unfinished).item() == 0:
-            break
+        # unfinished[torch.nonzero((next_token==stop_token).squeeze(-1)).cpu()] = False
+        
+        if unfinished.sum() == 0:
+            return pred_logits, seqLogprob[:,:t+1], tokens[:,:t+1]
 
     # if method=="sample":
     #     step_time_avg.append(time.time() - T1)
     #     print(len(step_time_avg))
     #     print(f"bsz {config['batch_size']} sample_n {config['train_sample_n']} : {np.mean(np.array(step_time_avg))}")
-    return preds, seqLogprob, tokens 
+    return pred_logits, seqLogprob, tokens 
 
 #--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+#________________________________________________________________________________________________________
+        # if tokens is None:
+        #     # create a tensor of shape (B, max_len)
+        #     tokens = next_token
+        #     seqLogprob = sampled_logprob
+        # else:
+        #     tokens = torch.cat((tokens, next_token), dim=1)
+        #     seqLogprob = torch.cat((seqLogprob, sampled_logprob), dim = 1)
+#________________________________________________________________________________________________________
+        

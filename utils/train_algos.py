@@ -37,8 +37,6 @@ def SCST(model,prefix, targets, mask,max_length, stop_token, tokenizer, config):
 
     # len(gts) = bsz.
     # For each instance in batch --> 5 target cap.
-    import ipdb;ipdb.set_trace()
-
     gts = tuple(np.split(np.array(targets.cpu()), prefix.shape[0]))
     # gts = torch.chunk(targets.cpu(), prefix.shape[0], dim=0)
     out = {}
@@ -48,7 +46,7 @@ def SCST(model,prefix, targets, mask,max_length, stop_token, tokenizer, config):
     # reward is moved to same device as logprobs for each sampled word for each caption.
     reward = torch.from_numpy(reward).to(policy_seqLogprob)
     loss = Reinforce(policy_seqLogprob, policy_cap.data, reward)
-
+    import ipdb;ipdb.set_trace()
     # (R(c,I) -b) averaged over batch. For a given caption, reward is same for log_probs of all the words generated
     # out['reward'] = reward[:,0].mean()
     # out['loss'] = loss

@@ -1,10 +1,10 @@
 #dynamic variables
 jatayu : True
-batch_size : 2
+batch_size : 8
 mle_bsz : 4
 train_method : "scst" # ['mle', 'scst']
-init_val : False
-train_sample_n : 5
+init_val : True
+train_sample_n : 2
 
 # Hyperparams
 lr : 2e-5
@@ -20,7 +20,7 @@ warmup_steps : 5000
 log_train_metrics : False
 
 #Boolean variables
-logging : False
+logging : True
 save_every_epoch : False
 save_best_val : False
 save_best_metric : True
