@@ -1,9 +1,9 @@
 #dynamic variables
-jatayu : True
+jatayu : False
 batch_size : 8
 mle_bsz : 4
 train_method : "scst" # ['mle', 'scst']
-init_val : True
+init_val : False
 train_sample_n : 2
 
 # Hyperparams
@@ -20,7 +20,7 @@ warmup_steps : 5000
 log_train_metrics : False
 
 #Boolean variables
-logging : True
+logging : False
 save_every_epoch : False
 save_best_val : False
 save_best_metric : True
@@ -39,7 +39,7 @@ wandb :
 
 cider_reward_weight : 1
 bleu_reward_weight : 0
-cached_tokens : 'coco-train-idxs'
+cached_tokens : 'coco-train-idxs_gpt'
 
 #Sampling 
 method : "clip_cap"

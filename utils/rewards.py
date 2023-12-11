@@ -19,6 +19,9 @@ Bleu_scorer = None
 #CiderD_scorer = CiderD(df='corpus')
 
 def init_scorer(cached_tokens):
+
+    # precomputed document frequencies.
+    import ipdb;ipdb.set_trace()
     global CiderD_scorer
     CiderD_scorer = CiderD_scorer or CiderD(df=cached_tokens)
     global Cider_scorer

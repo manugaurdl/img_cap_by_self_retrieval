@@ -27,7 +27,7 @@ from utils.eval_utils import validation, language_eval
 from utils.train_algos import LMCriterion, SCST
 from utils.rewards import init_scorer
 
-TRAIN = True
+TRAIN = False
 torch.manual_seed(0)
 random.seed(0)
 torch.autograd.set_detect_anomaly(True)

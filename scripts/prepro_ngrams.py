@@ -7,11 +7,11 @@ import json
 import argparse
 from six.moves import cPickle
 import captioning.utils.misc as utils
-from collections import defaultdict
-
+from collections import defaultdictx
+from transformers import GPT2Tokenizer
 import sys
 sys.path.append("cider")
-from pyciderevalcap.ciderD.ciderD_scorer import CiderScorer
+from cider.pyciderevalcap.ciderD.ciderD_scorer import CiderScorer
 
 
 def get_doc_freq(refs, params):
@@ -26,6 +26,7 @@ def build_dict(imgs, wtoi, params):
     wtoi['<eos>'] = 0
 
     count_imgs = 0
+    tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
 
     refs_words = []
     refs_idxs = []
@@ -39,9 +40,11 @@ def build_dict(imgs, wtoi, params):
             for sent in img['sentences']:
                 if hasattr(params, 'bpe'):
                     sent['tokens'] = params.bpe.segment(' '.join(sent['tokens'])).strip().split(' ')
-                tmp_tokens = sent['tokens'] + ['<eos>']
+                # tmp_tokens = sent['tokens'] + ['<eos>']
+                tmp_tokens = sent['tokens'] + ['.']
                 tmp_tokens = [_ if _ in wtoi else 'UNK' for _ in tmp_tokens]
                 ref_words.append(' '.join(tmp_tokens))
+                import ipdb;ipdb.set_trace()
                 ref_idxs.append(' '.join([str(wtoi[_]) for _ in tmp_tokens]))
             refs_words.append(ref_words)
             refs_idxs.append(ref_idxs)
@@ -76,8 +79,8 @@ def main(params):
 
     ngram_words, ngram_idxs, ref_len = build_dict(imgs, wtoi, params)
 
-    utils.pickle_dump({'document_frequency': ngram_words, 'ref_len': ref_len}, open(params['output_pkl']+'-words.p','wb'))
-    utils.pickle_dump({'document_frequency': ngram_idxs, 'ref_len': ref_len}, open(params['output_pkl']+'-idxs.p','wb'))
+    # utils.pickle_dump({'document_frequency': ngram_words, 'ref_len': ref_len}, open(params['output_pkl']+'-words.p','wb'))
+    # utils.pickle_dump({'document_frequency': ngram_idxs, 'ref_len': ref_len}, open(params['output_pkl']+'-idxs.p','wb'))
 
 if __name__ == "__main__":
 

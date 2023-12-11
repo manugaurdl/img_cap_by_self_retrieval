@@ -30,6 +30,7 @@ class CocoDataset(Dataset):
         self.cocoids = self.data['cocoid']
         self.filenames = self.data['filename']
         self.sent_ids = self.data['sent_id']
+        import ipdb;ipdb.set_trace()
 
         self.tokenizer = GPT2Tokenizer.from_pretrained(tokenizer)
         self.prefix_len = prefix_len
