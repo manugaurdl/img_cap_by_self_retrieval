@@ -30,7 +30,7 @@ from utils.rewards import init_scorer
 TRAIN = True
 torch.manual_seed(0)
 random.seed(0)
-
+torch.autograd.set_detect_anomaly(True)
 
 def train(model, config):
 
@@ -151,7 +151,6 @@ def train(model, config):
                 
             # accumulating loss
             epoch_train_losses.append(loss.item())
-            
             loss_meter.update(loss.item(), targets.shape[0])
             loss.backward()
             optimizer.step()
@@ -165,7 +164,7 @@ def train(model, config):
             
             }
             
-            # print(train_log)
+            print(train_log)
             # step_time_avg.append(time.time() - step_time_start)
             # print(f"batch {config['batch_size']} sample_n {config['train_sample_n']}  time avg : {np.mean(np.array(step_time_avg))}")
 

@@ -290,7 +290,7 @@ def sample(max_length, token_emb, model, temp, method, stop_token, tokenizer, co
         elif method == "sample":
             probs = torch.nn.functional.softmax(logits.data, dim=-1) # (B, vocab_size)
             next_token = torch.multinomial(probs, num_samples=1).squeeze(-1) # (B, 1)
-            sampled_logprob = logits.gather(1, next_token.unsqueeze(-1)).squeeze(-1)
+            sampled_logprob = logits.gather(1, next_token.clone().unsqueeze(-1)).squeeze(-1)
 
         if t ==0:
             # True for indices where stop token is not reached.

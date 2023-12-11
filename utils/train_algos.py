@@ -29,8 +29,7 @@ def SCST(model,prefix, targets, mask,max_length, stop_token, tokenizer, config):
     #trainable policy 
     # T1 = time.time()
     _, policy_seqLogprob, policy_cap = sample(max_length, prefix_embed, model, config['temp'], "sample", stop_token, tokenizer,config, sample_n = config['train_sample_n'])  # don't need logits (dist over all words). Have log prob for sampled word
-    print(tokenizer.batch_decode(greedy_cap))
-    print(tokenizer.batch_decode(policy_cap))
+
     # step_time_avg.append(time.time() - T1)
     # print(len(step_time_avg))
     # print(f"sample_n {config['train_sample_n']} : {np.mean(np.array(step_time_avg))}")
@@ -46,7 +45,6 @@ def SCST(model,prefix, targets, mask,max_length, stop_token, tokenizer, config):
     # reward is moved to same device as logprobs for each sampled word for each caption.
     reward = torch.from_numpy(reward).to(policy_seqLogprob)
     loss = Reinforce(policy_seqLogprob, policy_cap.data, reward)
-    import ipdb;ipdb.set_trace()
     # (R(c,I) -b) averaged over batch. For a given caption, reward is same for log_probs of all the words generated
     # out['reward'] = reward[:,0].mean()
     # out['loss'] = loss
