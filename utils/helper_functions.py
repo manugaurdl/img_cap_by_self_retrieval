@@ -162,3 +162,4 @@ def set_data_dir(config):
     config['test_data'] = os.path.join(data_dir, config['test_data'])
     config['out_dir'] = os.path.join(data_dir, config['out_dir'])
     config['cocotalk'] = os.path.join(data_dir, config['cocotalk'])
+    config['data_dir'] = data_dir

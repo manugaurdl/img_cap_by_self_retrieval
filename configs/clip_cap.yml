@@ -1,16 +1,16 @@
 #dynamic variables
-jatayu : False
-batch_size : 8
+jatayu : True
+batch_size : 10
 mle_bsz : 4
 train_method : "scst" # ['mle', 'scst']
-init_val : False
+init_val : True
 train_sample_n : 2
 
 # Hyperparams
 lr : 2e-5
 optimizer: "AdamW"
 num_epochs: 10
-prefix_length : 10
+prefix_length : 40
 prefix_dim : 512
 num_layers : 6
 attn_heads : 8
@@ -24,7 +24,7 @@ logging : False
 save_every_epoch : False
 save_best_val : False
 save_best_metric : True
-freeze_gpt : True
+freeze_gpt : False
 
 # wandb related variables
 wandb : 

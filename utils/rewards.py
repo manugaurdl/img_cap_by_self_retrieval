@@ -21,7 +21,6 @@ Bleu_scorer = None
 def init_scorer(cached_tokens):
 
     # precomputed document frequencies.
-    import ipdb;ipdb.set_trace()
     global CiderD_scorer
     CiderD_scorer = CiderD_scorer or CiderD(df=cached_tokens)
     global Cider_scorer
@@ -115,7 +114,7 @@ def get_self_critical_reward(greedy_res, data_gts, gen_result,config):
         bleu_scores = np.array(bleu_scores[3])
     else:
         bleu_scores = 0
-
+    # import ipdb;ipdb.set_trace()
     scores = cider_reward_weight * cider_scores + bleu_reward_weight * bleu_scores
     """
     For each img :  Take reward for policy cap. Rescale it using reward for greedy cap.

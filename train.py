@@ -21,11 +21,12 @@ import wandb
 import time
 import random
 import evaluate
-from utils.helper_functions import *#open_pickle, dump_pickle, save_model, Summary, AverageMeter, Metrics,int2mil
+from utils.helper_functions import * #open_pickle, dump_pickle, save_model, Summary, AverageMeter, Metrics,int2mil
 from data.cocodataset import *
-from utils.eval_utils import validation, language_eval
+from utils.eval_utils import validation, language_eval, clip_cap_reproduce_validation
 from utils.train_algos import LMCriterion, SCST
 from utils.rewards import init_scorer
+from models.clipcap_og import *
 
 TRAIN = False
 torch.manual_seed(0)
@@ -49,9 +50,17 @@ def train(model, config):
         optimizer = AdamW(model.parameters(), lr=float(config['lr']))
 
     else:
-        load_model(model, output_dir,f'clip_mle_best_cider')
+        # load_model(model, output_dir,f'clip_mle_best_cider')
         optimizer = AdamW(model.parameters(), lr=float(2e-5))
         init_scorer(config['cached_tokens'])
+
+    #reproducing clip-cap
+    if config['freeze_gpt']:
+        path = os.path.join(config['data_dir'], 'data/clipcap/transformer_weights.pt') # these are RN weights. they have 640 dim. We will need to train this from scratch.
+    else:
+        path = os.path.join(config['data_dir'], 'data/clipcap/coco_weights.pt')
+    model.load_state_dict(torch.load(path))
+
 
     
     if not os.path.exists(output_dir):
@@ -91,10 +100,11 @@ def train(model, config):
     stop_token =  tokenizer.encode(config['stop_token'])[0]
 
     step = 1
-
+    
     # Validation loss before epoch 1
     if config['init_val']:
-        val_loss_meter, val_lang_stats = validation(model, val_dataloader,val_dataset, device, config)
+        val_loss_meter, val_lang_stats = clip_cap_reproduce_validation(model, val_dataloader,val_dataset, device, config)
+        # val_loss_meter, val_lang_stats = validation(model, val_dataloader,val_dataset, device, config)
     
     #### "val_loss_avg": val_loss_meter.avg,
         val_log = {"val_CIDEr" : val_lang_stats["CIDEr"],
@@ -213,9 +223,19 @@ def train(model, config):
     return model
 
 def trigger_training(config):
-        
-    model = Model(clip_dim = config['prefix_dim'], prefix_len = config['prefix_length'], const_len =config['prefix_length'], 
-                num_layers = config['num_layers'], attn_heads = config['attn_heads'], freeze_gpt = config['freeze_gpt'],cocotalk = config['cocotalk'])
+    
+    #reproducing clipcap
+    
+    if config['freeze_gpt']:
+        mapping_type = {'mlp': MappingType.MLP, 'transformer': MappingType.Transformer}['transformer']
+        model = ClipCaptionPrefix(10, clip_length=10, prefix_size=512, num_layers=8, mapping_type=mapping_type)    
+    else:
+        mapping_type = {'mlp': MappingType.MLP, 'transformer': MappingType.Transformer}['mlp']
+        model = ClipCaptionModel(10, clip_length=10, prefix_size=512, num_layers=8, mapping_type=mapping_type)    
+    
+    # model = Model(clip_dim = config['prefix_dim'], prefix_len = config['prefix_length'], const_len =config['prefix_length'], 
+    #             num_layers = config['num_layers'], attn_heads = config['attn_heads'], freeze_gpt = config['freeze_gpt'],cocotalk = config['cocotalk'])
+    
     trainable_params(model)
 
     if config['logging'] and (not config["wandb"]["sweep"]):

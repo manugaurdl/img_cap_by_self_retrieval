@@ -11,9 +11,10 @@ class TransformerMapper(nn.Module):
     def __init__(self, prefix_len, clip_dim, gpt_dim,const_len, attn_heads, num_layers):
         super(TransformerMapper, self).__init__()
 
-        self.linear = nn.Linear(clip_dim,prefix_len*(gpt_dim))
         self.learnable_const = nn.Parameter(torch.randn(const_len, gpt_dim), requires_grad=True)
         self.transformer = Transformer(gpt_dim, attn_heads, num_layers)  #token_embedding, attn_heads, num_blocks
+        self.linear = nn.Linear(clip_dim,prefix_len*(gpt_dim))
+
         self.prefix_len = prefix_len
 
     def forward(self, x):
@@ -58,9 +59,9 @@ class Model(nn.Module):
         self.gpt_dim = self.gpt.transformer.wte.weight.shape[1]     #token embedding weight.shape
 
         # cocotalk vocab
-        self.vocab = open_json(cocotalk)['ix_to_word']
-        bad_endings = ['a','an','the','in','for','at','of','with','before','after','on','upon','near','to','is','are','am','the']
-        self.bad_endings_ix = [int(k) for k,v in self.vocab.items() if v in bad_endings]
+        # self.vocab = open_json(cocotalk)['ix_to_word']
+        # bad_endings = ['a','an','the','in','for','at','of','with','before','after','on','upon','near','to','is','are','am','the']
+        # self.bad_endings_ix = [int(k) for k,v in self.vocab.items() if v in bad_endings]
 
 
         if self.freeze_gpt:
