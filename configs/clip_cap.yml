@@ -1,8 +1,8 @@
 #dynamic variables
 jatayu : False
-batch_size : 4
+batch_size : 2
 mle_bsz : 4
-train_method : "scst" # ['mle', 'scst']
+train_method : "mle" # ['mle', 'scst']
 init_val : True
 train_sample_n : 2
 
@@ -21,10 +21,9 @@ log_train_metrics : False
 
 #Boolean variables
 logging : False
-save_every_epoch : False
-save_best_val : False
+save_model : True
 save_best_metric : True
-freeze_gpt : False
+freeze_gpt : True
 
 # wandb related variables
 wandb : 
@@ -64,3 +63,4 @@ top_p : 0.8
 temp : 1
 stop_token : '.'
 lang_eval : 1
+reproduce_clipcap : False

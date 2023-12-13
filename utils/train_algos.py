@@ -54,8 +54,10 @@ def SCST(model,prefix, targets, mask,max_length, stop_token, tokenizer, config):
 def LMCriterion(model, prefix, targets, mask, meta_data, prefix_len):
 
     outputs = model(prefix,targets, mask)
+
     # logits corresponding to preds for all caption tokens are taken.
     # i.e FROM logit of last learnable token TO logit of second last caption token.
+
     logits = outputs.logits[:, prefix_len - 1: -1]  #(B,41, vocab_size)
     loss = F.cross_entropy(logits.reshape(-1, logits.shape[-1]), targets.to(torch.long).flatten(), ignore_index=0) # (B,T) flattened to (B*T)
 

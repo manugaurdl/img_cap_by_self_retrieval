@@ -31,7 +31,7 @@ from models.clipcap_og import *
 TRAIN = False
 torch.manual_seed(0)
 random.seed(0)
-torch.autograd.set_detect_anomaly(True)
+# torch.autograd.set_detect_anomaly(True)
 
 def train(model, config):
 
@@ -50,18 +50,12 @@ def train(model, config):
         optimizer = AdamW(model.parameters(), lr=float(config['lr']))
 
     else:
-        # load_model(model, output_dir,f'clip_mle_best_cider')
-        optimizer = AdamW(model.parameters(), lr=float(2e-5))
+        load_model(model, output_dir,f'clip_mle_best_cider')
+        optimizer = AdamW(model.parameters(), lr=float(1e-7))
         init_scorer(config['cached_tokens'])
 
-    #reproducing clip-cap
-    if config['freeze_gpt']:
-        path = os.path.join(config['data_dir'], 'data/clipcap/transformer_weights.pt') # these are RN weights. they have 640 dim. We will need to train this from scratch.
-    else:
+    if config['reproduce_clipcap']:
         path = os.path.join(config['data_dir'], 'data/clipcap/coco_weights.pt')
-    model.load_state_dict(torch.load(path))
-
-
     
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -69,8 +63,6 @@ def train(model, config):
 
     model = model.to(device)
     model.train()
-    if config['freeze_gpt']:
-        model.gpt.eval()
     
     loss_meter = AverageMeter("train_loss", ":.5f")
 
@@ -108,7 +100,6 @@ def train(model, config):
         val_loss_meter, val_lang_stats = validation(model, val_dataloader,val_dataset, device, config)
         # val_loss_meter, val_lang_stats = validation(model, val_dataloader,val_dataset, device, config)
     
-    #### "val_loss_avg": val_loss_meter.avg,
         val_log = {"val_CIDEr" : val_lang_stats["CIDEr"],
                 "val_SPICE" : val_lang_stats["SPICE"]
                                 }
@@ -207,37 +198,28 @@ def train(model, config):
         # Logging epoch info 
         if config['logging']: 
             wandb.log(val_log, step = step)
-            # logging.info({**train_log, **val_log})
-        # print({**train_log, **val_log})
+        
 
-        #Saving
-        # if config['logging'] and config['save_best_val']:
-        #         if val_loss_meter.avg< val_min:
-        #             val_min = val_loss_meter.avg
-        #             save_model(output_dir,f'{model_name}_epoch_{epoch+1}',model)
-        if config['logging'] and config['save_best_metric']:
-                if val_lang_stats["CIDEr"] > metric_max:
-                    metric_max  = val_lang_stats["CIDEr"]
-                    save_model(output_dir,f'{model_name}_best_cider',model)
-                    
-        elif config['logging'] and config['save_every_epoch']:
-            save_model(output_dir,f'{epoch+1}',model)
-            
+
+        if config['save_model'] and config['save_best_metric']:
+            if val_lang_stats["CIDEr"] > metric_max:
+                metric_max  = val_lang_stats["CIDEr"]
+                save_model(output_dir,f'{model_name}_best_cider',model)
+
+    #save last epoch
+    if config['save_model']:
+        save_model(output_dir,f'{model_name}_last_epoch',model)
+
     return model
 
 def trigger_training(config):
     
-    #reproducing clipcap
-    
-    if config['freeze_gpt']:
-        mapping_type = {'mlp': MappingType.MLP, 'transformer': MappingType.Transformer}['transformer']
-        model = ClipCaptionPrefix(10, clip_length=10, prefix_size=512, num_layers=8, mapping_type=mapping_type)    
-    else:
+    if config['reproduce_clipcap']:    
         mapping_type = {'mlp': MappingType.MLP, 'transformer': MappingType.Transformer}['mlp']
         model = ClipCaptionModel(10, clip_length=10, prefix_size=512, num_layers=8, mapping_type=mapping_type)    
-    
-    # model = Model(clip_dim = config['prefix_dim'], prefix_len = config['prefix_length'], const_len =config['prefix_length'], 
-    #             num_layers = config['num_layers'], attn_heads = config['attn_heads'], freeze_gpt = config['freeze_gpt'],cocotalk = config['cocotalk'])
+    else:
+        model = Model(clip_dim = config['prefix_dim'], prefix_len = config['prefix_length'], const_len =config['prefix_length'], 
+                num_layers = config['num_layers'], attn_heads = config['attn_heads'], freeze_gpt = config['freeze_gpt'],cocotalk = config['cocotalk'])
     
     trainable_params(model)
 
