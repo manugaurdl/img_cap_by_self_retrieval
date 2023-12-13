@@ -1,6 +1,6 @@
 #dynamic variables
-jatayu : True
-batch_size : 10
+jatayu : False
+batch_size : 4
 mle_bsz : 4
 train_method : "scst" # ['mle', 'scst']
 init_val : True
@@ -10,7 +10,7 @@ train_sample_n : 2
 lr : 2e-5
 optimizer: "AdamW"
 num_epochs: 10
-prefix_length : 40
+prefix_length : 10
 prefix_dim : 512
 num_layers : 6
 attn_heads : 8
@@ -43,20 +43,20 @@ cached_tokens : 'coco-train-idxs_gpt'
 
 #Sampling 
 method : "clip_cap"
-sampling_method : "sample"
+sampling_method : "greedy"
 eval_sample_n : 1
 
 # Path variables
-train_data : 'data/new_train_cocodataset.pkl'
-val_data : 'data/new_val_cocodataset.pkl'
-test_data : 'data/new_test_cocodataset.pkl'
+train_data : 'data/ViT-B_32_train_emb.pkl'
+val_data : 'data/ViT-B_32_val_emb.pkl'
+test_data : 'data/ViT-B_32_test_emb.pkl'
 out_dir : 'checkpoints/clip_ViT-B_32/'
 cocotalk : 'data/cocotalk.json'
 
 #static variables
 gpu_id: 0
 tokenizer : "gpt2"
-normalize_prefix : True 
+normalize_prefix : False 
 use_beam_search: False
 entry_count : 1
 max_length : 67  # maximum number of words

@@ -23,7 +23,7 @@ import random
 import evaluate
 from utils.helper_functions import * #open_pickle, dump_pickle, save_model, Summary, AverageMeter, Metrics,int2mil
 from data.cocodataset import *
-from utils.eval_utils import validation, language_eval, clip_cap_reproduce_validation
+from utils.eval_utils import validation, language_eval
 from utils.train_algos import LMCriterion, SCST
 from utils.rewards import init_scorer
 from models.clipcap_og import *
@@ -91,8 +91,10 @@ def train(model, config):
 
     val_dataset = CocoDataset(config['val_data'], config['prefix_length'],config['normalize_prefix'],'val', config['tokenizer'])
     val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+
     test_dataset = CocoDataset(config['test_data'], config['prefix_length'],config['normalize_prefix'],'test', config['tokenizer'])
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+
     tokenizer = val_dataset.tokenizer
     prefix_len = val_dataset.prefix_len
     max_length = val_dataset.max_len_token
@@ -103,13 +105,14 @@ def train(model, config):
     
     # Validation loss before epoch 1
     if config['init_val']:
-        val_loss_meter, val_lang_stats = clip_cap_reproduce_validation(model, val_dataloader,val_dataset, device, config)
+        val_loss_meter, val_lang_stats = validation(model, val_dataloader,val_dataset, device, config)
         # val_loss_meter, val_lang_stats = validation(model, val_dataloader,val_dataset, device, config)
     
     #### "val_loss_avg": val_loss_meter.avg,
         val_log = {"val_CIDEr" : val_lang_stats["CIDEr"],
                 "val_SPICE" : val_lang_stats["SPICE"]
                                 }
+        import ipdb;ipdb.set_trace()
         if config['logging']: 
             wandb.log(val_log, step = step)
         print(val_log)
