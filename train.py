@@ -57,6 +57,7 @@ def train(model, config):
     # if config['reproduce_clipcap']: 
     #     path = os.path.join(config['data_dir'], 'data/clipcap/')
     #     load_model(model, path, "coco_weights")
+    
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -64,7 +65,7 @@ def train(model, config):
 
     model = model.to(device)
     model.train()
-    
+
     loss_meter = AverageMeter("train_loss", ":.5f")
 
     # Dataloaders
@@ -72,7 +73,6 @@ def train(model, config):
     if TRAIN:
         train_dataset = CocoDataset(config['train_data'], config['prefix_length'],config['normalize_prefix'], 'train', config['tokenizer'])
         train_dataloader = DataLoader(train_dataset, batch_size=train_bsz, shuffle=True, drop_last=True)
-        import ipdb;ipdb.set_trace()
         if config['train_method']=="mle":
             scheduler = get_linear_schedule_with_warmup(
                 optimizer, num_warmup_steps=config['warmup_steps'], num_training_steps=epochs* len(train_dataloader))
@@ -81,7 +81,7 @@ def train(model, config):
                 optimizer, num_warmup_steps=0, num_training_steps=epochs* len(train_dataloader))
   
 
-
+    import ipdb;ipdb.set_trace()
     val_dataset = CocoDataset(config['val_data'], config['prefix_length'],config['normalize_prefix'],'val', config['tokenizer'])
     val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
 
@@ -138,6 +138,7 @@ def train(model, config):
             targets, mask, prefix = targets.to(device), mask.to(device), prefix.to(device, dtype=torch.float32) # (B,41), (B,51), (B,1024/512)
 
             if config['train_method'] == 'mle':
+
                 prefix = repeat_tensors(targets.shape[0]//prefix.shape[0],prefix)
                 loss, preds, entropy, perplexity = LMCriterion(model, prefix, targets, mask, meta_data, prefix_len)
                 
@@ -221,6 +222,8 @@ def train(model, config):
 
 def trigger_training(config):
     
+    # only for validation/inference
+
     if config['reproduce_clipcap']:    
         mapping_type = {'mlp': MappingType.MLP, 'transformer': MappingType.Transformer}['mlp']
         model = ClipCaptionModel(10, clip_length=10, prefix_size=512, num_layers=8, mapping_type=mapping_type)    

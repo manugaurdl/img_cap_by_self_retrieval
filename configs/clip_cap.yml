@@ -1,9 +1,9 @@
 #dynamic variables
 jatayu : True
 batch_size : 128
-mle_bsz : 40
+mle_bsz : 32
 train_method : "mle" # ['mle', 'scst']
-init_val : True
+init_val : False
 train_sample_n : 2
 
 # Hyperparams
@@ -12,9 +12,9 @@ optimizer: "AdamW"
 num_epochs: 10
 prefix_length : 10
 prefix_dim : 512
-num_layers : 6
+num_layers : 8
 attn_heads : 8
-warmup_steps : 5000
+warmup_steps : 1000
 
 #training 
 log_train_metrics : False
@@ -23,7 +23,7 @@ log_train_metrics : False
 logging : False
 save_model : True
 save_best_metric : True
-freeze_gpt : True
+freeze_gpt : False
 
 # wandb related variables
 wandb : 
@@ -32,7 +32,7 @@ wandb :
   sweep_run_count : 100
   entity : "manugaur"
   project : "img_cap_self_retrieval"
-  run_name : "clip_mle"
+  run_name : "clip_mle_mlp"
 
 #scst
 
@@ -63,4 +63,4 @@ top_p : 0.8
 temp : 1
 stop_token : '.'
 lang_eval : 1
-reproduce_clipcap : True
+reproduce_clipcap : False

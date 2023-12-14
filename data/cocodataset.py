@@ -51,7 +51,7 @@ class CocoDataset(Dataset):
             self.tokenized_captions = [] # list of list of captions 
             
             token_len_list = []
-            cocoid2tokenidx = {}  #  cocoid --> idx for self.tokenized_captions
+            self.cocoid2tokenidx = {}  #  cocoid --> idx for self.tokenized_captions
 
             for idx, image in enumerate(self.images): 
                 
@@ -65,13 +65,13 @@ class CocoDataset(Dataset):
                 
                 token_len_list.extend([token.shape[-1] for token in tokens]) # sotre list of lengths of all tokens.
 
-                cocoid2tokenidx[cocoid] = idx
+                self.cocoid2tokenidx[cocoid] = idx
 
             all_len = torch.tensor(token_len_list, dtype = torch.float)
             #max = 182
             self.max_len_token = min(all_len.mean() + 10*(all_len.std()), all_len.max())
             
-            dump_pickle(cocoid2tokenidx,os.path.join(data_path.split('ViT')[0],f'cocoid2tokenidx_{self.split}.pkl'))
+            dump_pickle(self.cocoid2tokenidx,os.path.join(data_path.split('ViT')[0],f'cocoid2tokenidx_{self.split}.pkl'))
             dump_pickle((self.tokenized_captions, self.max_len_token), self.indexed_dataset_path)
 
     def __len__(self):
