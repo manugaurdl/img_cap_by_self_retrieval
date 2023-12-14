@@ -256,7 +256,10 @@ def sample(max_length, token_emb, model, temp, method, stop_token, tokenizer, co
 
         if t ==0:
             # True for indices where stop token is not reached.
-            unfinished = next_token != stop_token
+            try:
+                unfinished = next_token != stop_token
+            except:
+                import ipdb;ipdb.set_trace()
         else:
             # For instances in batch which are finished --> overwrite sampled next_token with 0.
             next_token[~unfinished] = 0

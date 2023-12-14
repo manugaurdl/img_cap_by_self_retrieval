@@ -28,7 +28,7 @@ from utils.train_algos import LMCriterion, SCST
 from utils.rewards import init_scorer
 from models.clipcap_og import *
 
-TRAIN = False
+TRAIN = True
 torch.manual_seed(0)
 random.seed(0)
 # torch.autograd.set_detect_anomaly(True)
@@ -54,9 +54,10 @@ def train(model, config):
         optimizer = AdamW(model.parameters(), lr=float(1e-7))
         init_scorer(config['cached_tokens'])
 
-    if config['reproduce_clipcap']:
-        path = os.path.join(config['data_dir'], 'data/clipcap/coco_weights.pt')
-    
+    # if config['reproduce_clipcap']: 
+    #     path = os.path.join(config['data_dir'], 'data/clipcap/')
+    #     load_model(model, path, "coco_weights")
+
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     #load pretrained model if scst
@@ -70,8 +71,8 @@ def train(model, config):
     
     if TRAIN:
         train_dataset = CocoDataset(config['train_data'], config['prefix_length'],config['normalize_prefix'], 'train', config['tokenizer'])
-        train_dataloader = DataLoader(train_dataset, batch_size=train_bsz, shuffle=True, drop_last=True, num_workers = 4)
-        
+        train_dataloader = DataLoader(train_dataset, batch_size=train_bsz, shuffle=True, drop_last=True)
+        import ipdb;ipdb.set_trace()
         if config['train_method']=="mle":
             scheduler = get_linear_schedule_with_warmup(
                 optimizer, num_warmup_steps=config['warmup_steps'], num_training_steps=epochs* len(train_dataloader))
@@ -86,7 +87,7 @@ def train(model, config):
 
     test_dataset = CocoDataset(config['test_data'], config['prefix_length'],config['normalize_prefix'],'test', config['tokenizer'])
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
-
+    print(f"train dataloader len = {len(train_dataloader)}")
     tokenizer = val_dataset.tokenizer
     prefix_len = val_dataset.prefix_len
     max_length = val_dataset.max_len_token
@@ -100,10 +101,12 @@ def train(model, config):
         val_loss_meter, val_lang_stats = validation(model, val_dataloader,val_dataset, device, config)
         # val_loss_meter, val_lang_stats = validation(model, val_dataloader,val_dataset, device, config)
     
-        val_log = {"val_CIDEr" : val_lang_stats["CIDEr"],
-                "val_SPICE" : val_lang_stats["SPICE"]
+        val_log = {"CIDEr" : val_lang_stats["CIDEr"],
+                "SPICE" : val_lang_stats["SPICE"],
+                "Bleu@4" : val_lang_stats["Bleu_4"],
+                'METEOR': val_lang_stats["METEOR"],
+                "entropy" : val_lang_stats['entropy'],
                                 }
-        import ipdb;ipdb.set_trace()
         if config['logging']: 
             wandb.log(val_log, step = step)
         print(val_log)
@@ -177,21 +180,25 @@ def train(model, config):
         
 
         #Eval metrics for epoch i
-        if config['log_train_metrics'] and config['train_method'] == 'mle':
-            epoch_train_tgts = torch.cat((epoch_train_tgts), dim=0)
-            mask = epoch_train_tgts > 0
-            target_cap  = [[tokenizer.decode(epoch_train_tgts[i][mask[i]])] for i in range(epoch_train_tgts.shape[0])]
-            train_lang_stats = language_eval("cocotalk.json", predictions, "train_temp", 'train')
+        # if config['log_train_metrics'] and config['train_method'] == 'mle':
+        #     epoch_train_tgts = torch.cat((epoch_train_tgts), dim=0)
+        #     mask = epoch_train_tgts > 0
+        #     target_cap  = [[tokenizer.decode(epoch_train_tgts[i][mask[i]])] for i in range(epoch_train_tgts.shape[0])]
+        #     train_lang_stats = language_eval("cocotalk.json", predictions, "train_temp", 'train')
     
-            train_log = {"train_CIDEr" : train_lang_stats["CIDEr"],"train_SPICE" : train_lang_stats["SPICE"]}
+        #     train_log = {"train_CIDEr" : train_lang_stats["CIDEr"],"train_SPICE" : train_lang_stats["SPICE"]}
 
         #Validation
         val_start = time.time()
         val_loss_meter, val_lang_stats = validation(model, val_dataloader, val_dataset, device, config)
    
-        val_log = {"val_CIDEr" : val_lang_stats["CIDEr"],
-                "val_SPICE" : val_lang_stats["SPICE"]
-                }
+ 
+        val_log = {"CIDEr" : val_lang_stats["CIDEr"],
+                "SPICE" : val_lang_stats["SPICE"],
+                "Bleu@4" : val_lang_stats["Bleu_4"],
+                'METEOR': val_lang_stats["METEOR"],
+                "entropy" : val_lang_stats['entropy'],
+                                }
         val_end = time.time()
         print(f'train time : {val_start - train_start} val time : {val_end - val_start}')
         
@@ -204,11 +211,11 @@ def train(model, config):
         if config['save_model'] and config['save_best_metric']:
             if val_lang_stats["CIDEr"] > metric_max:
                 metric_max  = val_lang_stats["CIDEr"]
-                save_model(output_dir,f'{model_name}_best_cider',model)
+                save_model(output_dir,f'{model_name}_best_cider',model, optimizer, epoch)
 
     #save last epoch
     if config['save_model']:
-        save_model(output_dir,f'{model_name}_last_epoch',model)
+        save_model(output_dir,f'{model_name}_last_epoch',model, optimizer, epoch)
 
     return model
 
