@@ -86,10 +86,17 @@ class Model(nn.Module):
     
     def parameters(self, recurse: bool = True):
         if self.freeze_gpt:
-            return self.mapping_network.parameters()
-
-
+            return self.mapping_network.parameters()            
         return super().parameters()
+
+    def train(self, mode: bool = True):
+        super(Model, self).train(mode)
+        if self.freeze_gpt:
+            self.gpt.eval()
+        return self
+
+
+
 
 # model = Model()
 # def surgery(model: Model):

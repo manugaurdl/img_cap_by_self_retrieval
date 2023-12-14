@@ -80,12 +80,12 @@ def validation(model, val_dataloader,val_dataset, device, config):
         if idx ==0 and eval_sample_n > 1:
             repeat_num = logits.shape[0]//targets.shape[0] 
 
-
         targets, mask, prefix = targets.to(device), mask.to(device), prefix.to(device, dtype=torch.float32)
-        
-        # prefix_embed = model(prefix,targets, mask, only_prefix = True)
 
-        prefix_embed = model.clip_project(prefix).view(prefix.shape[0],model.prefix_length, -1)
+        if config['reproduce_clipcap']:
+            prefix_embed = model.clip_project(prefix).view(prefix.shape[0],model.prefix_length, -1)
+        else:
+            prefix_embed = model(prefix,targets, mask, only_prefix = True)
 
         #sample entire caption
         # preds : last token's logit at every time step
@@ -256,7 +256,10 @@ def sample(max_length, token_emb, model, temp, method, stop_token, tokenizer, co
 
         if t ==0:
             # True for indices where stop token is not reached.
-            unfinished = next_token != stop_token
+            try:
+                unfinished = next_token != stop_token
+            except:
+                import ipdb;ipdb.set_trace()
         else:
             # For instances in batch which are finished --> overwrite sampled next_token with 0.
             next_token[~unfinished] = 0

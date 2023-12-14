@@ -70,11 +70,13 @@ def dump_pickle(data,path):
     with open(path, 'wb') as f:
         pickle.dump(data,f)
 
-def save_model(output_dir, model_name, model):
-    torch.save(
-    model.state_dict(),
-    os.path.join(output_dir, f'{model_name}.pt'),
-)
+def save_model(output_dir, model_name, model, optimizer, epoch):
+    torch.save({
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            }, os.path.join(output_dir, f'{model_name}.pt'))
+
 
 def load_model(model, output_dir, model_name):
     path = os.path.join(output_dir, f'{model_name}.pt')

@@ -31,7 +31,7 @@ from models.clipcap_og import *
 TRAIN = False
 torch.manual_seed(0)
 random.seed(0)
-torch.autograd.set_detect_anomaly(True)
+# torch.autograd.set_detect_anomaly(True)
 
 def train(model, config):
 
@@ -50,36 +50,38 @@ def train(model, config):
         optimizer = AdamW(model.parameters(), lr=float(config['lr']))
 
     else:
-        # load_model(model, output_dir,f'clip_mle_best_cider')
-        optimizer = AdamW(model.parameters(), lr=float(2e-5))
+        load_model(model, output_dir,f'clip_mle_best_cider')
+        optimizer = AdamW(model.parameters(), lr=float(1e-7))
         init_scorer(config['cached_tokens'])
 
-    #reproducing clip-cap
-    if config['freeze_gpt']:
-        path = os.path.join(config['data_dir'], 'data/clipcap/transformer_weights.pt') # these are RN weights. they have 640 dim. We will need to train this from scratch.
-    else:
-        path = os.path.join(config['data_dir'], 'data/clipcap/coco_weights.pt')
-    model.load_state_dict(torch.load(path))
-
-
+    if config['reproduce_clipcap']: 
+        path = os.path.join(config['data_dir'], 'data/clipcap/')
+        load_model(model, path, "coco_weights")
     
+    # path = os.path.join(config['data_dir'], 'data/clipcap/coco_weights.pt')
+    # pt_weights = torch.load(path)    
+    # key_changes = {"mapping_network.model.0.weight" : "clip_project.model.0.weight",
+    #                 "mapping_network.model.0.bias" : "clip_project.model.0.bias",
+    #                 "mapping_network.model.2.weight" :"clip_project.model.2.weight",
+    #                 "mapping_network.model.2.bias"  :"clip_project.model.2.bias"}
+    # key_changes = {v:k for k,v in key_changes.items()}
+    # adapted_state_dict = {key_changes.get(key, key): value for key, value in pt_weights.items()}
+    # model.load_state_dict(adapted_state_dict)
+
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     #load pretrained model if scst
-
+    
     model = model.to(device)
     model.train()
-    if config['freeze_gpt']:
-        model.gpt.eval()
-    
+
     loss_meter = AverageMeter("train_loss", ":.5f")
 
     # Dataloaders
     
     if TRAIN:
         train_dataset = CocoDataset(config['train_data'], config['prefix_length'],config['normalize_prefix'], 'train', config['tokenizer'])
-        train_dataloader = DataLoader(train_dataset, batch_size=train_bsz, shuffle=True, drop_last=True, num_workers = 4)
-        
+        train_dataloader = DataLoader(train_dataset, batch_size=train_bsz, shuffle=True, drop_last=True)
         if config['train_method']=="mle":
             scheduler = get_linear_schedule_with_warmup(
                 optimizer, num_warmup_steps=config['warmup_steps'], num_training_steps=epochs* len(train_dataloader))
@@ -88,13 +90,11 @@ def train(model, config):
                 optimizer, num_warmup_steps=0, num_training_steps=epochs* len(train_dataloader))
   
 
-
     val_dataset = CocoDataset(config['val_data'], config['prefix_length'],config['normalize_prefix'],'val', config['tokenizer'])
     val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
 
     test_dataset = CocoDataset(config['test_data'], config['prefix_length'],config['normalize_prefix'],'test', config['tokenizer'])
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
-
     tokenizer = val_dataset.tokenizer
     prefix_len = val_dataset.prefix_len
     max_length = val_dataset.max_len_token
@@ -105,14 +105,16 @@ def train(model, config):
     
     # Validation loss before epoch 1
     if config['init_val']:
+        import ipdb;ipdb.set_trace()
         val_loss_meter, val_lang_stats = validation(model, val_dataloader,val_dataset, device, config)
         # val_loss_meter, val_lang_stats = validation(model, val_dataloader,val_dataset, device, config)
     
-    #### "val_loss_avg": val_loss_meter.avg,
-        val_log = {"val_CIDEr" : val_lang_stats["CIDEr"],
-                "val_SPICE" : val_lang_stats["SPICE"]
+        val_log = {"CIDEr" : val_lang_stats["CIDEr"],
+                "SPICE" : val_lang_stats["SPICE"],
+                "Bleu@4" : val_lang_stats["Bleu_4"],
+                'METEOR': val_lang_stats["METEOR"],
+                "entropy" : val_lang_stats['entropy'],
                                 }
-        import ipdb;ipdb.set_trace()
         if config['logging']: 
             wandb.log(val_log, step = step)
         print(val_log)
@@ -144,6 +146,7 @@ def train(model, config):
             targets, mask, prefix = targets.to(device), mask.to(device), prefix.to(device, dtype=torch.float32) # (B,41), (B,51), (B,1024/512)
 
             if config['train_method'] == 'mle':
+
                 prefix = repeat_tensors(targets.shape[0]//prefix.shape[0],prefix)
                 loss, preds, entropy, perplexity = LMCriterion(model, prefix, targets, mask, meta_data, prefix_len)
                 
@@ -186,58 +189,55 @@ def train(model, config):
         
 
         #Eval metrics for epoch i
-        if config['log_train_metrics'] and config['train_method'] == 'mle':
-            epoch_train_tgts = torch.cat((epoch_train_tgts), dim=0)
-            mask = epoch_train_tgts > 0
-            target_cap  = [[tokenizer.decode(epoch_train_tgts[i][mask[i]])] for i in range(epoch_train_tgts.shape[0])]
-            train_lang_stats = language_eval("cocotalk.json", predictions, "train_temp", 'train')
+        # if config['log_train_metrics'] and config['train_method'] == 'mle':
+        #     epoch_train_tgts = torch.cat((epoch_train_tgts), dim=0)
+        #     mask = epoch_train_tgts > 0
+        #     target_cap  = [[tokenizer.decode(epoch_train_tgts[i][mask[i]])] for i in range(epoch_train_tgts.shape[0])]
+        #     train_lang_stats = language_eval("cocotalk.json", predictions, "train_temp", 'train')
     
-            train_log = {"train_CIDEr" : train_lang_stats["CIDEr"],"train_SPICE" : train_lang_stats["SPICE"]}
+        #     train_log = {"train_CIDEr" : train_lang_stats["CIDEr"],"train_SPICE" : train_lang_stats["SPICE"]}
 
         #Validation
         val_start = time.time()
         val_loss_meter, val_lang_stats = validation(model, val_dataloader, val_dataset, device, config)
    
-        val_log = {"val_CIDEr" : val_lang_stats["CIDEr"],
-                "val_SPICE" : val_lang_stats["SPICE"]
-                }
+ 
+        val_log = {"CIDEr" : val_lang_stats["CIDEr"],
+                "SPICE" : val_lang_stats["SPICE"],
+                "Bleu@4" : val_lang_stats["Bleu_4"],
+                'METEOR': val_lang_stats["METEOR"],
+                "entropy" : val_lang_stats['entropy'],
+                                }
         val_end = time.time()
         print(f'train time : {val_start - train_start} val time : {val_end - val_start}')
         
         # Logging epoch info 
         if config['logging']: 
             wandb.log(val_log, step = step)
-            # logging.info({**train_log, **val_log})
-        # print({**train_log, **val_log})
+        
 
-        #Saving
-        # if config['logging'] and config['save_best_val']:
-        #         if val_loss_meter.avg< val_min:
-        #             val_min = val_loss_meter.avg
-        #             save_model(output_dir,f'{model_name}_epoch_{epoch+1}',model)
-        if config['logging'] and config['save_best_metric']:
-                if val_lang_stats["CIDEr"] > metric_max:
-                    metric_max  = val_lang_stats["CIDEr"]
-                    save_model(output_dir,f'{model_name}_best_cider',model)
-                    
-        elif config['logging'] and config['save_every_epoch']:
-            save_model(output_dir,f'{epoch+1}',model)
-            
+
+        if config['save_model'] and config['save_best_metric']:
+            if val_lang_stats["CIDEr"] > metric_max:
+                metric_max  = val_lang_stats["CIDEr"]
+                save_model(output_dir,f'{model_name}_best_cider',model, optimizer, epoch)
+
+    #save last epoch
+    if config['save_model']:
+        save_model(output_dir,f'{model_name}_last_epoch',model, optimizer, epoch)
+
     return model
 
 def trigger_training(config):
     
-    #reproducing clipcap
-    
-    if config['freeze_gpt']:
-        mapping_type = {'mlp': MappingType.MLP, 'transformer': MappingType.Transformer}['transformer']
-        model = ClipCaptionPrefix(10, clip_length=10, prefix_size=512, num_layers=8, mapping_type=mapping_type)    
-    else:
+    # only for validation/inference
+
+    if config['reproduce_clipcap']:    
         mapping_type = {'mlp': MappingType.MLP, 'transformer': MappingType.Transformer}['mlp']
         model = ClipCaptionModel(10, clip_length=10, prefix_size=512, num_layers=8, mapping_type=mapping_type)    
-    
-    # model = Model(clip_dim = config['prefix_dim'], prefix_len = config['prefix_length'], const_len =config['prefix_length'], 
-    #             num_layers = config['num_layers'], attn_heads = config['attn_heads'], freeze_gpt = config['freeze_gpt'],cocotalk = config['cocotalk'])
+    else:
+        model = Model(clip_dim = config['prefix_dim'], prefix_len = config['prefix_length'], const_len =config['prefix_length'], 
+                num_layers = config['num_layers'], attn_heads = config['attn_heads'], freeze_gpt = config['freeze_gpt'],cocotalk = config['cocotalk'])
     
     trainable_params(model)
 
