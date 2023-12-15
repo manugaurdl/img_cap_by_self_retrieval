@@ -3,7 +3,7 @@ jatayu : True
 batch_size : 128
 mle_bsz : 32
 train_method : "mle" # ['mle', 'scst']
-init_val : False
+init_val : True
 train_sample_n : 2
 
 # Hyperparams
@@ -63,4 +63,4 @@ top_p : 0.8
 temp : 1
 stop_token : '.'
 lang_eval : 1
-reproduce_clipcap : False
+reproduce_clipcap : True

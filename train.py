@@ -54,15 +54,24 @@ def train(model, config):
         optimizer = AdamW(model.parameters(), lr=float(1e-7))
         init_scorer(config['cached_tokens'])
 
-    # if config['reproduce_clipcap']: 
-    #     path = os.path.join(config['data_dir'], 'data/clipcap/')
-    #     load_model(model, path, "coco_weights")
+    if config['reproduce_clipcap']: 
+        path = os.path.join(config['data_dir'], 'data/clipcap/')
+        load_model(model, path, "coco_weights")
     
+    # path = os.path.join(config['data_dir'], 'data/clipcap/coco_weights.pt')
+    # pt_weights = torch.load(path)    
+    # key_changes = {"mapping_network.model.0.weight" : "clip_project.model.0.weight",
+    #                 "mapping_network.model.0.bias" : "clip_project.model.0.bias",
+    #                 "mapping_network.model.2.weight" :"clip_project.model.2.weight",
+    #                 "mapping_network.model.2.bias"  :"clip_project.model.2.bias"}
+    # key_changes = {v:k for k,v in key_changes.items()}
+    # adapted_state_dict = {key_changes.get(key, key): value for key, value in pt_weights.items()}
+    # model.load_state_dict(adapted_state_dict)
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     #load pretrained model if scst
-
+    
     model = model.to(device)
     model.train()
 
@@ -81,13 +90,11 @@ def train(model, config):
                 optimizer, num_warmup_steps=0, num_training_steps=epochs* len(train_dataloader))
   
 
-    import ipdb;ipdb.set_trace()
     val_dataset = CocoDataset(config['val_data'], config['prefix_length'],config['normalize_prefix'],'val', config['tokenizer'])
     val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
 
     test_dataset = CocoDataset(config['test_data'], config['prefix_length'],config['normalize_prefix'],'test', config['tokenizer'])
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
-    print(f"train dataloader len = {len(train_dataloader)}")
     tokenizer = val_dataset.tokenizer
     prefix_len = val_dataset.prefix_len
     max_length = val_dataset.max_len_token
@@ -98,6 +105,7 @@ def train(model, config):
     
     # Validation loss before epoch 1
     if config['init_val']:
+        import ipdb;ipdb.set_trace()
         val_loss_meter, val_lang_stats = validation(model, val_dataloader,val_dataset, device, config)
         # val_loss_meter, val_lang_stats = validation(model, val_dataloader,val_dataset, device, config)
     
