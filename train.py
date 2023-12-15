@@ -105,7 +105,6 @@ def train(model, config):
     
     # Validation loss before epoch 1
     if config['init_val']:
-        import ipdb;ipdb.set_trace()
         val_loss_meter, val_lang_stats = validation(model, val_dataloader,val_dataset, device, config)
         # val_loss_meter, val_lang_stats = validation(model, val_dataloader,val_dataset, device, config)
     

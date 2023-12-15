@@ -121,6 +121,7 @@ def validation(model, val_dataloader,val_dataset, device, config):
     
     #--------------------------------------------------------
         sents = tokenizer.batch_decode(tokens)
+        sents = [sent.split("!")[0] for sent in sents]
         
         # predictions --> [{'image_id': 184613, 'caption': 'a swimmer ravine fee...iers backs', 'perplexity': 8.26982307434082, 'entropy': 8.715027809143066}]
         for k, sent in enumerate(sents): # sents is a list of batch_size length.
