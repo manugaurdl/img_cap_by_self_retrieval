@@ -1,10 +1,9 @@
 #dynamic variables
 jatayu : True
-batch_size : 128
+batch_size : 16
 mle_bsz : 32
 train_method : "mle" # ['mle', 'scst']
 init_val : True
-train_sample_n : 2
 
 # Hyperparams
 lr : 2e-5
@@ -15,6 +14,15 @@ prefix_dim : 512
 num_layers : 8
 attn_heads : 8
 warmup_steps : 1000
+
+#scst training
+
+cider_reward_weight : 1
+bleu_reward_weight : 0
+cached_tokens : 'coco-train-idxs_gpt'
+scst_lr : 1e-7
+train_sample_n : 1
+use_scheduler : False
 
 #training 
 log_train_metrics : False
@@ -32,13 +40,8 @@ wandb :
   sweep_run_count : 100
   entity : "manugaur"
   project : "img_cap_self_retrieval"
-  run_name : "clip_mle_mlp"
+  run_name : "clip_mle_train_only_ln"
 
-#scst
-
-cider_reward_weight : 1
-bleu_reward_weight : 0
-cached_tokens : 'coco-train-idxs_gpt'
 
 #Sampling 
 method : "clip_cap"
@@ -63,4 +66,7 @@ top_p : 0.8
 temp : 1
 stop_token : '.'
 lang_eval : 1
+
+# Specific experiments (default = False)
 reproduce_clipcap : False
+train_only_layernorm : True

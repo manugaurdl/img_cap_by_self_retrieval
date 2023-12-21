@@ -46,10 +46,9 @@ def SCST(model,prefix, targets, mask,max_length, stop_token, tokenizer, config):
     reward = torch.from_numpy(reward).to(policy_seqLogprob)
     loss = Reinforce(policy_seqLogprob, policy_cap.data, reward)
     # (R(c,I) -b) averaged over batch. For a given caption, reward is same for log_probs of all the words generated
-    # out['reward'] = reward[:,0].mean()
-    # out['loss'] = loss
-    return reward[:,0].mean(), loss
 
+    #reward is averaged over num policy captions
+    return reward[:,0].mean(), loss
 
 def LMCriterion(model, prefix, targets, mask, meta_data, prefix_len):
 

@@ -29,6 +29,7 @@ from utils.rewards import init_scorer
 from models.clipcap_og import *
 
 TRAIN = True
+TEST = False
 torch.manual_seed(0)
 random.seed(0)
 # torch.autograd.set_detect_anomaly(True)
@@ -43,51 +44,52 @@ def train(model, config):
     batch_size = config['batch_size']
     train_bsz = config['batch_size']
     epochs = config['num_epochs']
-    output_dir = config['out_dir'] 
+    output_dir = config['out_dir']
+    scst_lr = config['scst_lr']
+
+    model = model.to(device)
 
     if config['train_method']=='mle':
         train_bsz = config['mle_bsz']
         optimizer = AdamW(model.parameters(), lr=float(config['lr']))
 
-    else:
-        load_model(model, output_dir,f'clip_mle_best_cider')
-        optimizer = AdamW(model.parameters(), lr=float(1e-7))
+    else:        
+        load_model(model, output_dir,f'clip_mle_mlp_best_cider')
+        optimizer = AdamW(model.parameters(), lr=float(scst_lr))
+        optim_path = os.path.join(output_dir, 'clip_mle_mlp_best_cider.pt')
+        optimizer.load_state_dict(torch.load(optim_path)['optimizer_state_dict'])
         init_scorer(config['cached_tokens'])
 
     if config['reproduce_clipcap']: 
         path = os.path.join(config['data_dir'], 'data/clipcap/')
         load_model(model, path, "coco_weights")
     
-    # path = os.path.join(config['data_dir'], 'data/clipcap/coco_weights.pt')
-    # pt_weights = torch.load(path)    
-    # key_changes = {"mapping_network.model.0.weight" : "clip_project.model.0.weight",
-    #                 "mapping_network.model.0.bias" : "clip_project.model.0.bias",
-    #                 "mapping_network.model.2.weight" :"clip_project.model.2.weight",
-    #                 "mapping_network.model.2.bias"  :"clip_project.model.2.bias"}
-    # key_changes = {v:k for k,v in key_changes.items()}
-    # adapted_state_dict = {key_changes.get(key, key): value for key, value in pt_weights.items()}
-    # model.load_state_dict(adapted_state_dict)
+    if TEST:
+        load_model(model, output_dir,f'clip_mle_mlp_best_cider.pt')
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     #load pretrained model if scst
     
-    model = model.to(device)
     model.train()
 
-    loss_meter = AverageMeter("train_loss", ":.5f")
+    # if config['train_only_ln']:
+    #     model.gpt.eval()
 
+    loss_meter = AverageMeter("train_loss", ":.5f")
+    reward_meter = AverageMeter("reward", ":.5f") 
     # Dataloaders
     
     if TRAIN:
         train_dataset = CocoDataset(config['train_data'], config['prefix_length'],config['normalize_prefix'], 'train', config['tokenizer'])
         train_dataloader = DataLoader(train_dataset, batch_size=train_bsz, shuffle=True, drop_last=True)
+        
         if config['train_method']=="mle":
             scheduler = get_linear_schedule_with_warmup(
                 optimizer, num_warmup_steps=config['warmup_steps'], num_training_steps=epochs* len(train_dataloader))
-        else:
-            scheduler = get_linear_schedule_with_warmup(
-                optimizer, num_warmup_steps=0, num_training_steps=epochs* len(train_dataloader))
+        # else:
+        #     scheduler = get_linear_schedule_with_warmup(
+        #         optimizer, num_warmup_steps=0, num_training_steps=epochs* len(train_dataloader))
   
 
     val_dataset = CocoDataset(config['val_data'], config['prefix_length'],config['normalize_prefix'],'val', config['tokenizer'])
@@ -105,8 +107,10 @@ def train(model, config):
     
     # Validation loss before epoch 1
     if config['init_val']:
-        val_loss_meter, val_lang_stats = validation(model, val_dataloader,val_dataset, device, config)
-        # val_loss_meter, val_lang_stats = validation(model, val_dataloader,val_dataset, device, config)
+        if TEST:
+            val_loss_meter, val_lang_stats = validation(model, test_dataloader, test_dataset, device, config)
+        else:
+            val_loss_meter, val_lang_stats = validation(model, val_dataloader, val_dataset, device, config)
     
         val_log = {"CIDEr" : val_lang_stats["CIDEr"],
                 "SPICE" : val_lang_stats["SPICE"],
@@ -145,8 +149,9 @@ def train(model, config):
             targets, mask, prefix = targets.to(device), mask.to(device), prefix.to(device, dtype=torch.float32) # (B,41), (B,51), (B,1024/512)
 
             if config['train_method'] == 'mle':
-
+                
                 prefix = repeat_tensors(targets.shape[0]//prefix.shape[0],prefix)
+                
                 loss, preds, entropy, perplexity = LMCriterion(model, prefix, targets, mask, meta_data, prefix_len)
                 
                 # Decode batch preds and add it to coco_predictions list
@@ -163,20 +168,21 @@ def train(model, config):
 
             else:
                 reward, loss = SCST(model, prefix, targets, mask, max_length, stop_token,tokenizer, config)
-                
             # accumulating loss
             epoch_train_losses.append(loss.item())
             loss_meter.update(loss.item(), targets.shape[0])
+            if config['train_method']=='scst':
+                reward_meter.update(reward.item(), targets.shape[0] * config['train_sample_n'])
             loss.backward()
             optimizer.step()
-            scheduler.step()
-            step+=1
+            if config['train_method'] == "mle" or config['use_scheduler']:
+                scheduler.step()
 
             #logging step info
             train_log = {"epoch": epoch+1,
             "train_loss_avg": loss_meter.avg,
+            "avg_reward" : reward_meter.avg,
             "lr": optimizer.state_dict()["param_groups"][0]["lr"],
-            
             }
             
             print(train_log)
@@ -185,7 +191,9 @@ def train(model, config):
 
             if config['logging']:
                 wandb.log(train_log, step = step)
-        
+
+            step+=1
+
 
         #Eval metrics for epoch i
         # if config['log_train_metrics'] and config['train_method'] == 'mle':
@@ -227,6 +235,16 @@ def train(model, config):
 
     return model
 
+
+def freeze_all_but_ln(m):
+    # freeze all the gpt parameter except layernorm
+    if not isinstance(m, torch.nn.modules.normalization.LayerNorm):
+        if hasattr(m, 'weight') and m.weight is not None:
+            m.weight.requires_grad_(False)
+        if hasattr(m, 'bias') and m.bias is not None:
+            m.bias.requires_grad_(False)
+
+
 def trigger_training(config):
     
     # only for validation/inference
@@ -237,6 +255,11 @@ def trigger_training(config):
     else:
         model = Model(clip_dim = config['prefix_dim'], prefix_len = config['prefix_length'], const_len =config['prefix_length'], 
                 num_layers = config['num_layers'], attn_heads = config['attn_heads'], freeze_gpt = config['freeze_gpt'],cocotalk = config['cocotalk'])
+    
+    if config['train_only_layernorm']:
+        # Pass all the params, and freeze non-layernorm params in GPT.
+        assert config['freeze_gpt'] == False, "freeze_gpt is True. Cannot access GPT parameters to train only layernorm"
+        model.gpt.apply(freeze_all_but_ln)
     
     trainable_params(model)
 

@@ -80,7 +80,7 @@ def save_model(output_dir, model_name, model, optimizer, epoch):
 
 def load_model(model, output_dir, model_name):
     path = os.path.join(output_dir, f'{model_name}.pt')
-    model.load_state_dict(torch.load(path))
+    model.load_state_dict(torch.load(path)['model_state_dict'])
 
 def int2mil(number):
     if abs(number) >= 1_000_000:

@@ -85,6 +85,12 @@ class Model(nn.Module):
         return out
     
     def parameters(self, recurse: bool = True):
+        """
+        requires_grad for all gpt parameters = True. All of them will accumulate gradients. But optimizer will only update the passed parameters.
+        In order to use the model in the future --> Need to use model.zero_grad() to stop gradient accumulation. 
+        Optimizer.zero_grad() stops accumulation for passed parameters.
+
+        """
         if self.freeze_gpt:
             return self.mapping_network.parameters()            
         return super().parameters()
@@ -94,14 +100,3 @@ class Model(nn.Module):
         if self.freeze_gpt:
             self.gpt.eval()
         return self
-
-
-
-
-# model = Model()
-# def surgery(model: Model):
-    # for layer in model.layers():
-    #   if isinstance(layer, LayerNorm):
-            # layer.requires_grad = False
-
-    # return model
