@@ -254,9 +254,9 @@ def trigger_training(config):
         model = ClipCaptionModel(10, clip_length=10, prefix_size=512, num_layers=8, mapping_type=mapping_type)    
     else:
         model = Model(clip_dim = config['prefix_dim'], prefix_len = config['prefix_length'], const_len =config['prefix_length'], 
-                num_layers = config['num_layers'], attn_heads = config['attn_heads'], freeze_gpt = config['freeze_gpt'],cocotalk = config['cocotalk'])
+                num_layers = config['num_layers'], attn_heads = config['attn_heads'], freeze_gpt = config['freeze_gpt'], train_only_ln = config['train_only_ln'],cocotalk = config['cocotalk'])
     
-    if config['train_only_layernorm']:
+    if config['train_only_ln']:
         # Pass all the params, and freeze non-layernorm params in GPT.
         assert config['freeze_gpt'] == False, "freeze_gpt is True. Cannot access GPT parameters to train only layernorm"
         model.gpt.apply(freeze_all_but_ln)

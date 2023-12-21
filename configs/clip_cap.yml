@@ -69,4 +69,4 @@ lang_eval : 1
 
 # Specific experiments (default = False)
 reproduce_clipcap : False
-train_only_layernorm : True
+train_only_ln : True

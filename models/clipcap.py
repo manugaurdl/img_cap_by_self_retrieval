@@ -47,7 +47,7 @@ class MLP(nn.Module):
 
 class Model(nn.Module):
 
-    def __init__(self, clip_dim,prefix_len, const_len,attn_heads, num_layers,freeze_gpt,cocotalk):
+    def __init__(self, clip_dim,prefix_len, const_len,attn_heads, num_layers,freeze_gpt, train_only_ln, cocotalk):
         super().__init__()
         self.clip_dim = clip_dim
         self.prefix_len = prefix_len
@@ -55,6 +55,7 @@ class Model(nn.Module):
         self.attn_heads = attn_heads
         self.num_layers = num_layers
         self.freeze_gpt = freeze_gpt
+        self.train_only_ln = train_only_ln
         self.gpt = GPT2LMHeadModel.from_pretrained('gpt2')
         self.gpt_dim = self.gpt.transformer.wte.weight.shape[1]     #token embedding weight.shape
 
@@ -64,7 +65,7 @@ class Model(nn.Module):
         # self.bad_endings_ix = [int(k) for k,v in self.vocab.items() if v in bad_endings]
 
 
-        if self.freeze_gpt:
+        if self.freeze_gpt or self.train_only_ln:
             self.mapping_network = TransformerMapper(self.prefix_len, self.clip_dim, self.gpt_dim, self.const_len, self.attn_heads, self.num_layers)
         else:
             self.mapping_network = MLP((self.clip_dim, (self.gpt_dim * self.prefix_len) // 2,
