@@ -65,7 +65,7 @@ class Model(nn.Module):
         # self.bad_endings_ix = [int(k) for k,v in self.vocab.items() if v in bad_endings]
 
 
-        if self.freeze_gpt or self.train_only_ln:
+        if self.freeze_gpt:
             self.mapping_network = TransformerMapper(self.prefix_len, self.clip_dim, self.gpt_dim, self.const_len, self.attn_heads, self.num_layers)
         else:
             self.mapping_network = MLP((self.clip_dim, (self.gpt_dim * self.prefix_len) // 2,
@@ -85,19 +85,20 @@ class Model(nn.Module):
 
         return out
     
-    def parameters(self, recurse: bool = True):
-        """
-        requires_grad for all gpt parameters = True. All of them will accumulate gradients. But optimizer will only update the passed parameters.
-        In order to use the model in the future --> Need to use model.zero_grad() to stop gradient accumulation. 
-        Optimizer.zero_grad() stops accumulation for passed parameters.
+    # def parameters(self, recurse: bool = True):
+    #     """
+    #     requires_grad for all gpt parameters = True. All of them will accumulate gradients. But optimizer will only update the passed parameters.
+    #     In order to use the model in the future --> Need to use model.zero_grad() to stop gradient accumulation. 
+    #     Optimizer.zero_grad() stops accumulation for passed parameters.
 
-        """
-        if self.freeze_gpt:
-            return self.mapping_network.parameters()            
-        return super().parameters()
+    #     """
+    #     if self.freeze_gpt:
+    #         return self.mapping_network.parameters()            
+    #     return super().parameters()
 
     def train(self, mode: bool = True):
         super(Model, self).train(mode)
-        if self.freeze_gpt:
+        # During ln finetuning, need dropout to be active
+        if self.freeze_gpt and not self.train_only_ln:
             self.gpt.eval()
         return self

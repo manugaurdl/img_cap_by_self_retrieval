@@ -235,14 +235,12 @@ def train(model, config):
 
     return model
 
-
-def freeze_all_but_ln(m):
-    # freeze all the gpt parameter except layernorm
-    if not isinstance(m, torch.nn.modules.normalization.LayerNorm):
+def unfreeze_ln(m):
+    if isinstance(m, torch.nn.modules.normalization.LayerNorm):
         if hasattr(m, 'weight') and m.weight is not None:
-            m.weight.requires_grad_(False)
+            m.weight.requires_grad_(True)
         if hasattr(m, 'bias') and m.bias is not None:
-            m.bias.requires_grad_(False)
+            m.bias.requires_grad_(True)
 
 
 def trigger_training(config):
@@ -256,10 +254,15 @@ def trigger_training(config):
         model = Model(clip_dim = config['prefix_dim'], prefix_len = config['prefix_length'], const_len =config['prefix_length'], 
                 num_layers = config['num_layers'], attn_heads = config['attn_heads'], freeze_gpt = config['freeze_gpt'], train_only_ln = config['train_only_ln'],cocotalk = config['cocotalk'])
     
+
+    if config['freeze_gpt']:
+        for name, param in model.gpt.named_parameters():
+            param.requires_grad = False
+
     if config['train_only_ln']:
-        # Pass all the params, and freeze non-layernorm params in GPT.
-        assert config['freeze_gpt'] == False, "freeze_gpt is True. Cannot access GPT parameters to train only layernorm"
-        model.gpt.apply(freeze_all_but_ln)
+        assert config['freeze_gpt'] == True, "freeze_gpt is not False. Freeze gpt before unfreezing ln." 
+        model.gpt.apply(unfreeze_ln)
+    
     
     trainable_params(model)
 

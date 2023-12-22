@@ -31,7 +31,7 @@ log_train_metrics : False
 logging : True
 save_model : True
 save_best_metric : True
-freeze_gpt : False
+freeze_gpt : True
 
 # wandb related variables
 wandb : 
@@ -40,8 +40,7 @@ wandb :
   sweep_run_count : 100
   entity : "manugaur"
   project : "img_cap_self_retrieval"
-  run_name : "clip_mle_train_only_ln"
-
+  run_name : "clip_mle_train_only_ln_with_dropout"
 
 #Sampling 
 method : "clip_cap"
