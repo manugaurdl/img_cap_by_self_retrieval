@@ -1,9 +1,11 @@
 #dynamic variables
-jatayu : True
-batch_size : 16
+logging : False
+jatayu : False
+lazy_load : True
+batch_size : 2
 mle_bsz : 32
-train_method : "mle" # ['mle', 'scst']
-init_val : True
+train_method : "scst" # ['mle', 'scst']
+init_val : False
 
 # Hyperparams
 lr : 2e-5
@@ -28,10 +30,9 @@ use_scheduler : False
 log_train_metrics : False
 
 #Boolean variables
-logging : True
-save_model : True
-save_best_metric : True
-freeze_gpt : True
+save_model : False
+save_best_metric : False
+freeze_gpt : False
 
 # wandb related variables
 wandb : 
@@ -68,4 +69,4 @@ lang_eval : 1
 
 # Specific experiments (default = False)
 reproduce_clipcap : False
-train_only_ln : True
+train_only_ln : False

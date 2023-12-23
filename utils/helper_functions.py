@@ -157,7 +157,7 @@ def set_data_dir(config):
     if config['jatayu']:
         data_dir = '/home/manugaur/img_cap_self_retrieval/data'
     else:
-        data_dir = '/ssd_scratch/cvit/manu/img_cap_self_retrieval_clip'
+            data_dir = '/ssd_scratch/cvit/manu/img_cap_self_retrieval_clip'
     
     config['train_data'] = os.path.join(data_dir, config['train_data'])
     config['val_data'] = os.path.join(data_dir, config['val_data'])

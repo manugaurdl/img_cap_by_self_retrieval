@@ -31,7 +31,6 @@ def Reinforce(policy_logprob, policy_cap, reward, reduction='mean'):
     # padded word --> words sampled after stop token. 
     # loss only calculated for policy caption i.e until first stop token.
     output = - policy_logprob * reward * mask
-
     if reduction == 'none':
         output = output.view(N,L).sum(1) / mask.view(N,L).sum(1)
     elif reduction == 'mean':

@@ -36,6 +36,9 @@ random.seed(0)
 
 def train(model, config):
 
+    if config['lazy_load']:
+        assert config['logging'] == False, "Currently Lazy Loading : Only for debugging"
+
     # params and model
     model_name = config["wandb"]["run_name"]
     val_min = float(1000)
@@ -81,7 +84,7 @@ def train(model, config):
     # Dataloaders
     
     if TRAIN:
-        train_dataset = CocoDataset(config['train_data'], config['prefix_length'],config['normalize_prefix'], 'train', config['tokenizer'])
+        train_dataset = CocoDataset(config['train_data'], config['prefix_length'],config['normalize_prefix'], 'train', config['tokenizer'], config['lazy_load'])
         train_dataloader = DataLoader(train_dataset, batch_size=train_bsz, shuffle=True, drop_last=True)
         
         if config['train_method']=="mle":
@@ -92,10 +95,10 @@ def train(model, config):
         #         optimizer, num_warmup_steps=0, num_training_steps=epochs* len(train_dataloader))
   
 
-    val_dataset = CocoDataset(config['val_data'], config['prefix_length'],config['normalize_prefix'],'val', config['tokenizer'])
+    val_dataset = CocoDataset(config['val_data'], config['prefix_length'],config['normalize_prefix'],'val', config['tokenizer'],False)
     val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
 
-    test_dataset = CocoDataset(config['test_data'], config['prefix_length'],config['normalize_prefix'],'test', config['tokenizer'])
+    test_dataset = CocoDataset(config['test_data'], config['prefix_length'],config['normalize_prefix'],'test', config['tokenizer'], False)
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
     tokenizer = val_dataset.tokenizer
     prefix_len = val_dataset.prefix_len
@@ -104,7 +107,6 @@ def train(model, config):
     stop_token =  tokenizer.encode(config['stop_token'])[0]
 
     step = 1
-    
     # Validation loss before epoch 1
     if config['init_val']:
         if TEST:

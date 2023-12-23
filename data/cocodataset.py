@@ -9,6 +9,7 @@ from transformers import GPT2Tokenizer, GPT2LMHeadModel, AdamW, get_linear_sched
 from models.clipcap import Model
 from models.transformer import *
 from tqdm import tqdm
+import pickle
 
 
 class CocoDataset(Dataset):
@@ -19,11 +20,12 @@ class CocoDataset(Dataset):
               Mask is of length 50 however. As it has torch.ones(1,10) prepended to captions mask for image prefix embedding. 
     """
     
-    def __init__(self, data_path, prefix_len,norm_prefix, split, tokenizer):
+    def __init__(self, data_path, prefix_len,norm_prefix, split, tokenizer, lazy_load):
         """
         data_path : {model}_{split}_emb.pkl 
         indexed_dataset_path : {split}_cap2tion_tokens
         """
+        self.lazy_load = lazy_load
         self.data = open_pickle(data_path)
         self.clip_embed = self.data['clip_embedding']
         self.images = self.data['images']  # list of instances (images) for given split. Each is a dict of {cocoid, clip_idx}
@@ -39,7 +41,10 @@ class CocoDataset(Dataset):
         
         if os.path.isfile(self.indexed_dataset_path):
             print(f"loading {self.split} data.... ")
-            self.tokenized_captions, _ = open_pickle(self.indexed_dataset_path) # max_len used from train set.
+            
+            if not self.lazy_load:
+                self.tokenized_captions, _ = open_pickle(self.indexed_dataset_path) # max_len used from train set.
+            
             self.cocoid2tokenidx = open_pickle(os.path.join(data_path.split('ViT')[0],f'cocoid2tokenidx_{self.split}.pkl'))
         else:
             #using a given idx, we can access the clip embedding and its corresponding tokenized caption 
@@ -87,11 +92,13 @@ class CocoDataset(Dataset):
             tokens = torch.cat((tokens, pad)).int() # tokens is padded with -1.
 
             ### padded tokens replace the tokens. Here the padding is done by -1. But the tokens returned by the method have padding with 0.
-            self.tokenized_captions[idx][cap_idx] = tokens
+            if not self.lazy_load:
+                self.tokenized_captions[idx][cap_idx] = tokens
         else:
             # if caption > max_len, truncate it 
             tokens = tokens[:self.max_len_token]
-            self.tokenized_captions[idx][cap_idx] = tokens
+            if not self.lazy_load:
+                self.tokenized_captions[idx][cap_idx] = tokens
             
         mask = tokens.ge(0) #True for indices > 0 i,e padded indices = False
         tokens[~mask] =0  # padding now done with 0
@@ -105,7 +112,11 @@ class CocoDataset(Dataset):
         cocoid = image['cocoid']
         prefix = self.clip_embed[image['clip_embedding']]  # shape : [512]
         token_idx = self.cocoid2tokenidx[cocoid]
-        unpadded_tokens = self.tokenized_captions[token_idx][:5]
+        if self.lazy_load:
+            with open(f"/ssd_scratch/cvit/manu/img_cap_self_retrieval_clip/data/lazy_load_train/{token_idx}.pkl", "rb") as f:
+                unpadded_tokens = pickle.load(f)[:5]
+        else:
+            unpadded_tokens = self.tokenized_captions[token_idx][:5]
 
         padded_tokens, mask =  zip(*[self.pad(token_idx, cap_idx, tokens) for cap_idx, tokens in enumerate(unpadded_tokens)])   # list of 5 tokenized captions
         padded_tokens = torch.stack((padded_tokens),dim=0) #shape : [5,40]
