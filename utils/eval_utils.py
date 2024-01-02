@@ -236,7 +236,6 @@ def sample(max_length, token_emb, model, temp, method, stop_token, tokenizer, co
 
         if t == max_len:
             break
-
         outputs = model.gpt(inputs_embeds= token_emb)
 
         
@@ -251,9 +250,18 @@ def sample(max_length, token_emb, model, temp, method, stop_token, tokenizer, co
             sampled_logprob, next_token = torch.max(logits.data,dim = -1)        
 
         elif method == "sample":
-            probs = torch.nn.functional.softmax(logits.data, dim=-1) # (B, vocab_size)
+            # probs = torch.nn.functional.softmax(logits.data, dim=-1) # (B, vocab_size)
+            
+
+
+            
+            #************************  multinomial ******************************
+            import ipdb;ipdb.set_trace()
+
             next_token = torch.multinomial(probs, num_samples=1).squeeze(-1) # (B, 1)
             sampled_logprob = logits.gather(1, next_token.clone().unsqueeze(-1)).squeeze(-1)
+
+            #************************************************************************
 
         if t ==0:
             # True for indices where stop token is not reached.

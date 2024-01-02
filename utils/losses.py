@@ -26,11 +26,14 @@ def Reinforce(policy_logprob, policy_cap, reward, reduction='mean'):
     mask = (policy_cap.data>0).to(policy_logprob)
 
     #Flatten the mask. Padded words = 0
-    mask = torch.cat([mask.new(mask.size(0), 1).fill_(1), mask[:, :-1]], 1).reshape(-1)
+    
+    # mask = torch.cat([mask.new(mask.size(0), 1).fill_(1), mask[:, :-1]], 1).reshape(-1)
+    mask = mask.reshape(-1)
     
     # padded word --> words sampled after stop token. 
     # loss only calculated for policy caption i.e until first stop token.
     output = - policy_logprob * reward * mask
+    
     if reduction == 'none':
         output = output.view(N,L).sum(1) / mask.view(N,L).sum(1)
     elif reduction == 'mean':

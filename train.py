@@ -48,6 +48,7 @@ def train(model, config):
     train_bsz = config['batch_size']
     epochs = config['num_epochs']
     output_dir = config['out_dir']
+    load_model_from = config['load_model_from']
     scst_lr = config['scst_lr']
 
     model = model.to(device)
@@ -57,9 +58,10 @@ def train(model, config):
         optimizer = AdamW(model.parameters(), lr=float(config['lr']))
 
     else:        
-        load_model(model, output_dir,f'clip_mle_mlp_best_cider')
+        #clip_mle_frozen_gpt_best_cider
+        load_model(model, load_model_from,f'clip_mle_frozen_gpt_best_cider')
         optimizer = AdamW(model.parameters(), lr=float(scst_lr))
-        optim_path = os.path.join(output_dir, 'clip_mle_mlp_best_cider.pt')
+        optim_path = os.path.join(load_model_from, 'clip_mle_frozen_gpt_best_cider.pt')
         optimizer.load_state_dict(torch.load(optim_path)['optimizer_state_dict'])
         init_scorer(config['cached_tokens'])
 
@@ -68,16 +70,14 @@ def train(model, config):
         load_model(model, path, "coco_weights")
     
     if TEST:
-        load_model(model, output_dir,f'clip_mle_mlp_best_cider.pt')
+        load_model(model, load_model_from,f'clip_mle_mlp_best_cider.pt')
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     #load pretrained model if scst
     
+    # Currently, overriding .train() method 
     model.train()
-
-    # if config['train_only_ln']:
-    #     model.gpt.eval()
 
     loss_meter = AverageMeter("train_loss", ":.5f")
     reward_meter = AverageMeter("reward", ":.5f") 
@@ -130,7 +130,7 @@ def train(model, config):
         sys.stdout.flush()
 
         # progress = tqdm(total=len(train_dataloader), desc=output_prefix)
-        epoch_train_losses = []
+        # epoch_train_losses = []
         epoch_train_decoded_cap = []
         epoch_train_tgts = []
         train_start = time.time()
@@ -149,7 +149,6 @@ def train(model, config):
             mask = mask.view(-1, mask.shape[-1])
             
             targets, mask, prefix = targets.to(device), mask.to(device), prefix.to(device, dtype=torch.float32) # (B,41), (B,51), (B,1024/512)
-
             if config['train_method'] == 'mle':
                 
                 prefix = repeat_tensors(targets.shape[0]//prefix.shape[0],prefix)
@@ -170,8 +169,9 @@ def train(model, config):
 
             else:
                 reward, loss = SCST(model, prefix, targets, mask, max_length, stop_token,tokenizer, config)
+            
             # accumulating loss
-            epoch_train_losses.append(loss.item())
+            # epoch_train_losses.append(loss.item())
             loss_meter.update(loss.item(), targets.shape[0])
             if config['train_method']=='scst':
                 reward_meter.update(reward.item(), targets.shape[0] * config['train_sample_n'])
@@ -184,6 +184,7 @@ def train(model, config):
             train_log = {"epoch": epoch+1,
             "train_loss_avg": loss_meter.avg,
             "avg_reward" : reward_meter.avg,
+            "reward" : reward.item(),
             "lr": optimizer.state_dict()["param_groups"][0]["lr"],
             }
             
@@ -194,6 +195,9 @@ def train(model, config):
             if config['logging']:
                 wandb.log(train_log, step = step)
 
+            if config['save_every_n_iter'] and check_iter_to_save(step, n = 500, upper_bound = 3000):
+                save_model(output_dir,f'{model_name}_iter_{step}',model, optimizer, epoch)
+            
             step+=1
 
 
@@ -224,15 +228,16 @@ def train(model, config):
         if config['logging']: 
             wandb.log(val_log, step = step)
         
-
-
-        if config['save_model'] and config['save_best_metric']:
+        if config['save_best_metric']:
             if val_lang_stats["CIDEr"] > metric_max:
                 metric_max  = val_lang_stats["CIDEr"]
                 save_model(output_dir,f'{model_name}_best_cider',model, optimizer, epoch)
 
+        if config['save_every_epoch']:
+            save_model(output_dir,f'{model_name}_epoch_{epoch}',model, optimizer, epoch)
+
     #save last epoch
-    if config['save_model']:
+    if config['save_last_epoch'] and not config['save_every_epoch']:
         save_model(output_dir,f'{model_name}_last_epoch',model, optimizer, epoch)
 
     return model
@@ -262,10 +267,9 @@ def trigger_training(config):
             param.requires_grad = False
 
     if config['train_only_ln']:
-        assert config['freeze_gpt'] == True, "freeze_gpt is not False. Freeze gpt before unfreezing ln." 
+        assert config['freeze_gpt'] == True, "freeze_gpt is False. Freeze gpt before unfreezing layernorm layers." 
         model.gpt.apply(unfreeze_ln)
-    
-    
+
     trainable_params(model)
 
     if config['logging'] and (not config["wandb"]["sweep"]):

@@ -157,11 +157,17 @@ def set_data_dir(config):
     if config['jatayu']:
         data_dir = '/home/manugaur/img_cap_self_retrieval/data'
     else:
-            data_dir = '/ssd_scratch/cvit/manu/img_cap_self_retrieval_clip'
+        data_dir = '/ssd_scratch/cvit/manu/img_cap_self_retrieval_clip'
     
     config['train_data'] = os.path.join(data_dir, config['train_data'])
     config['val_data'] = os.path.join(data_dir, config['val_data'])
     config['test_data'] = os.path.join(data_dir, config['test_data'])
     config['out_dir'] = os.path.join(data_dir, config['out_dir'])
+    config['load_model_from'] = os.path.join(data_dir, config['load_model_from'])
     config['cocotalk'] = os.path.join(data_dir, config['cocotalk'])
     config['data_dir'] = data_dir
+
+def check_iter_to_save(step, n , upper_bound):
+    if step % n == 0 and step < upper_bound:
+        return True
+    return False

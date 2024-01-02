@@ -22,10 +22,10 @@ def SCST(model,prefix, targets, mask,max_length, stop_token, tokenizer, config):
         # print(len(step_time_avg))
         # print(f"bsz {config['batch_size']} sample_n {config['train_sample_n']} : {np.mean(np.array(step_time_avg))}")
 
-
+    #currently overriding train() method
     model.train()
-    if config['freeze_gpt']:
-        model.gpt.eval()
+    prefix_embed = model(prefix, targets, mask, only_prefix = True)
+
     #trainable policy 
     # T1 = time.time()
     _, policy_seqLogprob, policy_cap = sample(max_length, prefix_embed, model, config['temp'], "sample", stop_token, tokenizer,config, sample_n = config['train_sample_n'])  # don't need logits (dist over all words). Have log prob for sampled word
@@ -46,12 +46,13 @@ def SCST(model,prefix, targets, mask,max_length, stop_token, tokenizer, config):
     reward = torch.from_numpy(reward).to(policy_seqLogprob)
     loss = Reinforce(policy_seqLogprob, policy_cap.data, reward)
     # (R(c,I) -b) averaged over batch. For a given caption, reward is same for log_probs of all the words generated
+    import ipdb;ipdb.set_trace()
 
     #reward is averaged over num policy captions
     return reward[:,0].mean(), loss
 
 def LMCriterion(model, prefix, targets, mask, meta_data, prefix_len):
-
+    
     outputs = model(prefix,targets, mask)
 
     # logits corresponding to preds for all caption tokens are taken.

@@ -76,12 +76,14 @@ def get_self_critical_reward(greedy_res, data_gts, gen_result,config):
     #So, First B*sample_n image_ids--> policy captions
     # Last B image_ids -->  greedy captions
     # For bsz = 3 and sample_n = 5 : image_id = 6 is second policy cap of 2nd image and image_id = 17 is greedy cap of 2nd image.
+
+    # sample_n policy captions followed by 1 greedy caption for each image.
     res_ = [{'image_id':i, 'caption': res[i]} for i in range(len(res))]
     res__ = {i: res[i] for i in range(len(res_))}  # same as res_, but a dict (img_id : caption)
 
     """
     In gts_, each index correspond to [5 gts] for a given image i
-    For bsz = 3, sample_n = 5
+    For bsz = 3, sample_n = 5 : len = 18
     gts_ = [i_1,i_1,i_1,i_1,i_1, i_2,i_2,i_2,i_2,i_2, i_3,i_3,i_3,i_3,i_3,  i_1,  i_2,  i_3]
     same structure for res. But first sample_n * B --> policy cap. Last B --> greedy cap.
     """
