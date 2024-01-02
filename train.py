@@ -153,7 +153,7 @@ def train(model, config):
             if config['train_method'] == 'mle':
                 
                 prefix = repeat_tensors(targets.shape[0]//prefix.shape[0],prefix)
-                
+ 
                 loss, preds, entropy, perplexity = LMCriterion(model, prefix, targets, mask, meta_data, prefix_len)
                 
                 # Decode batch preds and add it to coco_predictions list

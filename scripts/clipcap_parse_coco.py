@@ -15,7 +15,7 @@ def main(clip_model_type: str, split : str):
     out_path = f"/ssd_scratch/cvit/manu/clipcap/parse_coco/{clip_model_name}_{split}_emb.pkl"
     clip_model, preprocess = clip.load(clip_model_type, device=device, jit=False)
     
-    with open(f'/ssd_scratch/cvit/manu/clipcap/parse_coco/{split}_cocoids.json', 'r') as f:
+    with open(f'/ssd_scratch/cvit/manu/img_cap_self_retrieval_clip/data/parse_coco_req/{split}_cocoids.json', 'r') as f:
         data = json.load(f)
     
     print("%0d captions loaded from json " % len(data))

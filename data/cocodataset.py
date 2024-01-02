@@ -21,9 +21,10 @@ class CocoDataset(Dataset):
     """
     
     def __init__(self, data_path, prefix_len,norm_prefix, split, tokenizer, lazy_load):
+
         """
-        data_path : {model}_{split}_emb.pkl 
-        indexed_dataset_path : {split}_cap2tion_tokens
+        data_path : {model}_{split}_emb.pkl , cocoid2caption.pkl
+        indexed_dataset_path : {split}_caption_tokens
         """
         self.lazy_load = lazy_load
         self.data = open_pickle(data_path)

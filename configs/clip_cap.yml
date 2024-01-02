@@ -32,7 +32,7 @@ log_train_metrics : False
 #Boolean variables
 save_model : False
 save_best_metric : False
-freeze_gpt : False
+freeze_gpt : True
 
 # wandb related variables
 wandb : 
