@@ -23,6 +23,7 @@ def SCST(model,prefix, targets, mask,max_length, stop_token, tokenizer, config):
         # print(f"bsz {config['batch_size']} sample_n {config['train_sample_n']} : {np.mean(np.array(step_time_avg))}")
 
     #currently overriding train() method
+
     model.train()
     prefix_embed = model(prefix, targets, mask, only_prefix = True)
 
@@ -41,12 +42,11 @@ def SCST(model,prefix, targets, mask,max_length, stop_token, tokenizer, config):
     out = {}
     # R(c,I) -b : (sample_n* B, max_len)  --> each generated word in for policy cap 'i' gets same reward.
     # Per image, hence sample_n rewards.
-    reward = get_self_critical_reward(greedy_cap, gts, policy_cap, config) #(n*B,40)
+    reward = get_self_critical_reward(greedy_cap, gts, policy_cap, config, tokenizer) #(n*B,40)
     # reward is moved to same device as logprobs for each sampled word for each caption.
     reward = torch.from_numpy(reward).to(policy_seqLogprob)
     loss = Reinforce(policy_seqLogprob, policy_cap.data, reward)
     # (R(c,I) -b) averaged over batch. For a given caption, reward is same for log_probs of all the words generated
-    import ipdb;ipdb.set_trace()
 
     #reward is averaged over num policy captions
     return reward[:,0].mean(), loss

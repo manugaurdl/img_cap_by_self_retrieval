@@ -3,6 +3,7 @@ import time
 from collections import OrderedDict
 import torch
 import sys
+import evaluate
 
 try:
     sys.path.append("cider")
@@ -37,15 +38,32 @@ def array_to_str(arr):
             break
     return out.strip()
 
-def get_self_critical_reward(greedy_res, data_gts, gen_result,config):
+
+
+class Metrics(object):
+    def __init__(self):
+        
+        self.bleu =  evaluate.load("bleu")
+        self.meteor = evaluate.load("meteor")
+    
+    def get_metric(self, metric,preds,refs):
+        if metric == "bleu":
+            return self.bleu.compute(predictions=preds, references= refs)
+        elif metric == "meteor":
+            return self.meteor.compute(predictions=preds, references= refs)
+
+eval_obj = Metrics()
+
+def get_self_critical_reward(greedy_res, data_gts, gen_result,config, tokenizer):
 
     #greedy_res : B cap
     #gen_res : sample_n * B cap
+
     cider_reward_weight = config['cider_reward_weight']
     bleu_reward_weight = config['bleu_reward_weight']
     batch_size = len(data_gts) 
     gen_result_size = gen_result.shape[0] # no. of policy captions = bsz * 5 cap
-    seq_per_img = gen_result_size // len(data_gts) #sample_n
+    seq_per_img = gen_result_size // batch_size #sample_n
     assert greedy_res.shape[0] == batch_size
 
     res = OrderedDict()
@@ -90,6 +108,30 @@ def get_self_critical_reward(greedy_res, data_gts, gen_result,config):
     gts_ = {i: gts[i // seq_per_img] for i in range(gen_result_size)} # index 1 to 5 --> 1st image's [5 gts], index 5 to 10 : 2nd image's [5 gts]
     gts_.update({i+gen_result_size: gts[i] for i in range(batch_size)}) # index 16 : 1st image's [5 gts].... index 17 :  2rd image's [5 gts]
     
+    # greedy_cap = [cap.split("!")[0] for cap in tokenizer.batch_decode(greedy_res)]
+    # policy_cap =  [cap.split("!")[0] for cap in tokenizer.batch_decode(gen_result)]
+    # # train_bleu = eval_obj.get_metric('bleu',pred_cap, target_cap )['bleu']
+    # references = []
+    # for gt in data_gts:
+    #     references.append([cap.split("!")[0] for cap in tokenizer.batch_decode(gt)])
+    # _, bleu_scores = Bleu_scorer.compute_score(gts_, res__)
+    # bleu_scores = np.array(bleu_scores[3])
+    # _, cider_scores = CiderD_scorer.compute_score(gts_, res_)
+    
+    # for i in range(batch_size):
+    #     print("\n")
+    #     print(f"policy: {policy_cap[i]}")
+    #     print("\n")
+    #     print(f"greedy: {greedy_cap[i]}")
+    #     print("\n")
+    #     for ref in references[i]:
+    #        print(ref)
+    #     print("CIDEr : ")
+    #     print(f"policy :{cider_scores[i]} greedy {cider_scores[batch_size+ i]}")
+    #     print("bleu : ")
+    #     print(f"policy :{bleu_scores[i]} greedy {bleu_scores[batch_size + i]}")
+
+
     # reward weight is 1 
 
     """
@@ -116,8 +158,9 @@ def get_self_critical_reward(greedy_res, data_gts, gen_result,config):
         bleu_scores = np.array(bleu_scores[3])
     else:
         bleu_scores = 0
-    # import ipdb;ipdb.set_trace()
+
     scores = cider_reward_weight * cider_scores + bleu_reward_weight * bleu_scores
+
     """
     For each img :  Take reward for policy cap. Rescale it using reward for greedy cap.
     scores before: (12,), bsz =2

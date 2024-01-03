@@ -195,7 +195,7 @@ def train(model, config):
             if config['logging']:
                 wandb.log(train_log, step = step)
 
-            if config['save_every_n_iter'] and check_iter_to_save(step, n = 500, upper_bound = 3000):
+            if config['save_every_n_iter'] and check_iter_to_save(step, n = 500, upper_bound = 2000):
                 save_model(output_dir,f'{model_name}_iter_{step}',model, optimizer, epoch)
             
             step+=1
