@@ -169,8 +169,9 @@ def get_self_critical_reward(greedy_res, data_gts, gen_result,config, tokenizer)
     scores (2,5) =      (2,5) -           (2,1)
     greedy cap broadcasted and subtracted from each policy cap
     """
+    np.set_printoptions(precision=3, suppress=True)
     scores = scores[:gen_result_size].reshape(batch_size, seq_per_img) - scores[-batch_size:][:, np.newaxis]
-
+    
     # flatten the scaled reward for all policy cap.   
     scores = scores.reshape(gen_result_size)
     

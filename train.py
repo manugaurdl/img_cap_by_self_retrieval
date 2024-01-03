@@ -138,6 +138,7 @@ def train(model, config):
 
         predictions = [] # coco
         step_time_avg = []
+
         for idx, (prefix, targets, mask, untokenized_cap, meta_data) in tqdm(enumerate(train_dataloader), total=len(train_dataloader)):
             # if idx == 100:
             #     break
@@ -199,31 +200,6 @@ def train(model, config):
                 save_model(output_dir,f'{model_name}_iter_{step}',model, optimizer, epoch)
             
             step+=1
-            if step == 3000:
-                #        val_start = time.time()
-                val_loss_meter, val_lang_stats = validation(model, val_dataloader, val_dataset, device, config)
-        
-        
-                val_log = {"CIDEr" : val_lang_stats["CIDEr"],
-                        "SPICE" : val_lang_stats["SPICE"],
-                        "Bleu@4" : val_lang_stats["Bleu_4"],
-                        'METEOR': val_lang_stats["METEOR"],
-                        "entropy" : val_lang_stats['entropy'],
-                                        }
-                val_end = time.time()
-                print(f'train time : {val_start - train_start} val time : {val_end - val_start}')
-                
-                # Logging epoch info 
-                if config['logging']: 
-                    wandb.log(val_log, step = step)
-                
-                if config['save_best_metric']:
-                    if val_lang_stats["CIDEr"] > metric_max:
-                        metric_max  = val_lang_stats["CIDEr"]
-                        save_model(output_dir,f'{model_name}_best_cider',model, optimizer, epoch)
-
-                if config['save_every_epoch']:
-                    save_model(output_dir,f'{model_name}_epoch_{epoch}_iter3000',model, optimizer, epoch)
 
 
         #Eval metrics for epoch i

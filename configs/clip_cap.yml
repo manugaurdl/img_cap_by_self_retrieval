@@ -31,7 +31,7 @@ log_train_metrics : False
 #Boolean variables
 save_last_epoch : False
 save_best_metric : True
-save_every_epoch : False
+save_every_epoch : True
 save_every_n_iter : True
 freeze_gpt : True
  
@@ -66,9 +66,15 @@ use_beam_search: False
 entry_count : 1
 max_length : 67  # maximum number of words
 top_p : 0.8
-temp : 1
+temp : 0.1
 stop_token : '.'
 lang_eval : 1
 # Specific experiments (default = False)
 reproduce_clipcap : False
 train_only_ln : False
+
+
+#-1.05  1
+#0.145 .1
+#0.011 .01
+#0  .001

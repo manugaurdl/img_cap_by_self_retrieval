@@ -30,7 +30,6 @@ def SCST(model,prefix, targets, mask,max_length, stop_token, tokenizer, config):
     #trainable policy 
     # T1 = time.time()
     _, policy_seqLogprob, policy_cap = sample(max_length, prefix_embed, model, config['temp'], "sample", stop_token, tokenizer,config, sample_n = config['train_sample_n'])  # don't need logits (dist over all words). Have log prob for sampled word
-
     # step_time_avg.append(time.time() - T1)
     # print(len(step_time_avg))
     # print(f"sample_n {config['train_sample_n']} : {np.mean(np.array(step_time_avg))}")
