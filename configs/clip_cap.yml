@@ -18,8 +18,8 @@ attn_heads : 8
 warmup_steps : 1000
 
 #scst training
-cider_reward_weight : 0
-bleu_reward_weight : 1
+cider_reward_weight : 1
+bleu_reward_weight : 0
 cached_tokens : 'coco-train-idxs_gpt'
 scst_lr : 1e-7
 train_sample_n : 1
