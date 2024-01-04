@@ -1,3 +1,5 @@
+/llama
+*.txt
 sbatch_logs/
 *.ipynb
 logs/

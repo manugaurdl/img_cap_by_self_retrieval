@@ -1,5 +1,5 @@
 #dynamic variables
-logging : True
+logging : False
 jatayu : True
 lazy_load : False
 batch_size : 16
@@ -42,7 +42,7 @@ wandb :
   sweep_run_count : 100
   entity : "manugaur"
   project : "img_cap_self_retrieval"
-  run_name : "clip_gpt_finetune_scst_logsoftmax_categorical"
+  run_name : "clip_gpt_finetune_scst_logsoftmax_categorical_temp_1e-2"
 
 #Sampling 
 method : "clip_cap"
@@ -66,7 +66,7 @@ use_beam_search: False
 entry_count : 1
 max_length : 67  # maximum number of words
 top_p : 0.8
-temp : 0.1
+temp : 0.01
 stop_token : '.'
 lang_eval : 1
 # Specific experiments (default = False)

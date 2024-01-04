@@ -9,6 +9,7 @@ import string
 import time
 import os
 import sys
+import pickle
 from tqdm import tqdm 
 from utils.helper_functions import *
 # load coco-caption if available
@@ -73,6 +74,7 @@ def validation(model, val_dataloader,val_dataset, device, config):
     # for idx, (prefix, targets, mask) in tqdm(enumerate(val_dataloader), total=len(val_dataloader)):
     
     step_time_avg = []
+    cocoid2pred = {}
 
     for idx, (prefix, targets, mask, untokenized_cap, meta_data) in tqdm(enumerate(val_dataloader), total=len(val_dataloader)):
         # step_time_start = time.time()
@@ -121,8 +123,14 @@ def validation(model, val_dataloader,val_dataset, device, config):
     
     #--------------------------------------------------------
         sents = tokenizer.batch_decode(tokens)
-        sents = [sent.split("!")[0] for sent in sents]
-        
+        sents = [[sent.split("!")[0]] for sent in sents]
+        data = {}
+        for i, caption in enumerate(sents):
+            data[meta_data[i]] = [caption]
+        cocoid2pred.update(data)    
+        if idx < 3: 
+            print(cocoid2pred)
+
         # predictions --> [{'image_id': 184613, 'caption': 'a swimmer ravine fee...iers backs', 'perplexity': 8.26982307434082, 'entropy': 8.715027809143066}]
         for k, sent in enumerate(sents): # sents is a list of batch_size length.
             # entry = {'image_id': data['infos'][k]['id'], 'caption': sent, 'perplexity': perplexity[k].item(), 'entropy': entropy[k].item()}
@@ -132,6 +140,9 @@ def validation(model, val_dataloader,val_dataset, device, config):
 
         # if sample_n > 1:
         #     eval_split_n(model, n_predictions, [fc_feats, att_feats, att_masks, data], eval_kwargs)
+    with open("/ssd_scratch/cvit/manu/val_preds_temp.pkl", "wb") as f:
+        pickle.dump(cocoid2pred, f)
+    print("TEMP PRED DICT SAVED. CAN DO EVAL NOW!")
 
     lang_stats = None
 
