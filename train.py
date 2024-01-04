@@ -25,10 +25,10 @@ from utils.helper_functions import * #open_pickle, dump_pickle, save_model, Summ
 from data.cocodataset import *
 from utils.eval_utils import validation, language_eval
 from utils.train_algos import LMCriterion, SCST
-from utils.rewards import init_scorer
+# from utils.rewards import init_scorer
 from models.clipcap_og import *
 
-TRAIN = False
+TRAIN = True
 TEST = False
 torch.manual_seed(0)
 random.seed(0)
@@ -64,7 +64,14 @@ def train(model, config):
         optim_path = os.path.join(load_model_from, 'clip_mle_frozen_gpt_best_cider.pt')
         # optimizer.load_state_dict(torch.load(optim_path)['optimizer_state_dict'])
         # import ipdb;ipdb.set_trace()
-        init_scorer(config['cached_tokens'])
+
+        if config['old_cider']:
+            print("Old cider")
+            init_scorer(config['cached_tokens'])
+            # init_scorer('corpus')
+        else:
+            # init_scorer('corpus')
+            print("New cider for REINFORCE training")
 
     if config['reproduce_clipcap']: 
         path = os.path.join(config['data_dir'], 'data/clipcap/')
@@ -114,12 +121,11 @@ def train(model, config):
             val_loss_meter, val_lang_stats = validation(model, test_dataloader, test_dataset, device, config)
         else:
             val_loss_meter, val_lang_stats = validation(model, val_dataloader, val_dataset, device, config)
-    
         val_log = {"CIDEr" : val_lang_stats["CIDEr"],
                 "SPICE" : val_lang_stats["SPICE"],
-                "Bleu@4" : val_lang_stats["Bleu_4"],
+                "Bleu_4" : val_lang_stats["Bleu_4"],
                 'METEOR': val_lang_stats["METEOR"],
-                "entropy" : val_lang_stats['entropy'],
+                "ROUGE_L" : val_lang_stats['ROUGE_L']
                                 }
         if config['logging']: 
             wandb.log(val_log, step = step)
@@ -218,9 +224,9 @@ def train(model, config):
  
         val_log = {"CIDEr" : val_lang_stats["CIDEr"],
                 "SPICE" : val_lang_stats["SPICE"],
-                "Bleu@4" : val_lang_stats["Bleu_4"],
+                "Bleu_4" : val_lang_stats["Bleu_4"],
                 'METEOR': val_lang_stats["METEOR"],
-                "entropy" : val_lang_stats['entropy'],
+                "ROUGE_L" : val_lang_stats['ROUGE_L']
                                 }
         val_end = time.time()
         print(f'train time : {val_start - train_start} val time : {val_end - val_start}')

@@ -1,12 +1,12 @@
 #dynamic variables
-logging : False
-jatayu : False
+logging : True
+jatayu : True
 lazy_load : False
-batch_size : 4
+batch_size : 16
 mle_bsz : 32
 train_method : "scst" # ['mle', 'scst']
 init_val : True
-
+old_cider : False
 # Hyperparams
 lr : 2e-5
 optimizer: "AdamW"
@@ -42,7 +42,7 @@ wandb :
   sweep_run_count : 100
   entity : "manugaur"
   project : "img_cap_self_retrieval"
-  run_name : "clip_gpt_finetune_scst_logsoftmax_categorical_temp_1e-2"
+  run_name : "clip_gpt_finetune_scst_cider_fixed"
 
 #Sampling 
 method : "clip_cap"

@@ -4,30 +4,34 @@ from collections import OrderedDict
 import torch
 import sys
 import evaluate
+from pprint import pprint
+OLD_CIDER = False
+if OLD_CIDER:
+    try:
+        sys.path.append("cider")
+        from pyciderevalcap.ciderD.ciderD import CiderD
+        from pyciderevalcap.cider.cider import Cider
+        sys.path.append("coco-caption")
+        from pycocoevalcap.bleu.bleu import Bleu
+    except:
+        print('cider or coco-caption missing')
 
-try:
-    sys.path.append("cider")
-    from pyciderevalcap.ciderD.ciderD import CiderD
-    from pyciderevalcap.cider.cider import Cider
-    sys.path.append("coco-caption")
-    from pycocoevalcap.bleu.bleu import Bleu
-except:
-    print('cider or coco-caption missing')
+    CiderD_scorer = None
+    Cider_scorer = None
+    Bleu_scorer = None
+    # CiderD_scorer = CiderD(df='corpus')
 
-CiderD_scorer = None
-Cider_scorer = None
-Bleu_scorer = None
-#CiderD_scorer = CiderD(df='corpus')
+    def init_scorer(cached_tokens):
 
-def init_scorer(cached_tokens):
-
-    # precomputed document frequencies.
-    global CiderD_scorer
-    CiderD_scorer = CiderD_scorer or CiderD(df=cached_tokens)
-    global Cider_scorer
-    Cider_scorer = Cider_scorer or Cider(df=cached_tokens)
-    global Bleu_scorer
-    Bleu_scorer = Bleu_scorer or Bleu(4)
+        # precomputed document frequencies.
+        global CiderD_scorer
+        CiderD_scorer = CiderD_scorer or CiderD(df=cached_tokens)
+        global Cider_scorer
+        Cider_scorer = Cider_scorer or Cider(df=cached_tokens)
+        global Bleu_scorer
+        Bleu_scorer = Bleu_scorer or Bleu(4)
+else:
+    from pycocoevalcap.eval import Cider, PTBTokenizer
 
 def array_to_str(arr):
     out = ''
@@ -53,6 +57,32 @@ class Metrics(object):
             return self.meteor.compute(predictions=preds, references= refs)
 
 eval_obj = Metrics()
+
+def compute_nlg_metrics(predictions, gold_standard):
+    tokenizer = PTBTokenizer()
+    predictions = tokenizer.tokenize(predictions)
+    ground_truth = tokenizer.tokenize(gold_standard)
+
+    scorers = [
+        # (Bleu(4), ["Bleu_1", "Bleu_2", "Bleu_3", "Bleu_4"]),
+        # (Meteor(), "METEOR"),
+        # (Rouge(), "ROUGE_L"),
+        (Cider(), "CIDEr")
+        # (Spice(), "SPICE"),
+    ]
+
+    summary = {}
+    for scorer, method in scorers:
+        score, scores = scorer.compute_score(ground_truth, predictions)
+        if isinstance(method, list):
+            for sc, scs, m in zip(score, scores, method):
+                summary[m] = sc
+        else:
+            summary[method] = score
+    # print()
+    # pprint(summary)
+    return scores
+
 
 def get_self_critical_reward(greedy_res, data_gts, gen_result,config, tokenizer):
 
@@ -108,12 +138,14 @@ def get_self_critical_reward(greedy_res, data_gts, gen_result,config, tokenizer)
     gts_ = {i: gts[i // seq_per_img] for i in range(gen_result_size)} # index 1 to 5 --> 1st image's [5 gts], index 5 to 10 : 2nd image's [5 gts]
     gts_.update({i+gen_result_size: gts[i] for i in range(batch_size)}) # index 16 : 1st image's [5 gts].... index 17 :  2rd image's [5 gts]
     
-    # greedy_cap = [cap.split("!")[0] for cap in tokenizer.batch_decode(greedy_res)]
-    # policy_cap =  [cap.split("!")[0] for cap in tokenizer.batch_decode(gen_result)]
-    # # train_bleu = eval_obj.get_metric('bleu',pred_cap, target_cap )['bleu']
-    # references = []
-    # for gt in data_gts:
-    #     references.append([cap.split("!")[0] for cap in tokenizer.batch_decode(gt)])
+    greedy_cap = [cap.split("!")[0] for cap in tokenizer.batch_decode(greedy_res)]
+    policy_cap =  [cap.split("!")[0] for cap in tokenizer.batch_decode(gen_result)]
+    # train_bleu = eval_obj.get_metric('bleu',pred_cap, target_cap )['bleu']
+    references = []
+    for gt in data_gts:
+        references.append([{"caption": cap.split("!")[0]} for cap in tokenizer.batch_decode(gt)])
+
+        
     # _, bleu_scores = Bleu_scorer.compute_score(gts_, res__)
     # bleu_scores = np.array(bleu_scores[3])
     # _, cider_scores = CiderD_scorer.compute_score(gts_, res_)
@@ -148,18 +180,34 @@ def get_self_critical_reward(greedy_res, data_gts, gen_result,config, tokenizer)
                 res_[0] : generated cap for that image.
     
     """
-    if cider_reward_weight > 0:
-        _, cider_scores = CiderD_scorer.compute_score(gts_, res_)
-    else:
-        cider_scores = 0
-    # default = 0
-    if bleu_reward_weight > 0:
-        _, bleu_scores = Bleu_scorer.compute_score(gts_, res__)
-        bleu_scores = np.array(bleu_scores[3])
-    else:
-        bleu_scores = 0
+    start = time.time()
 
-    scores = cider_reward_weight * cider_scores + bleu_reward_weight * bleu_scores
+    # ROBERTO DESSI CIDER CODE 
+    if not OLD_CIDER:        
+        gold_standard = {}
+        for idx, gt_list in enumerate(references + references):
+            gold_standard[idx] = gt_list        
+        predictions = {}
+        for idx, cap in enumerate(policy_cap + greedy_cap):
+            predictions[idx] = [{"caption": cap}]
+
+        cider_scores = compute_nlg_metrics(predictions, gold_standard)        
+    else:
+
+        if cider_reward_weight > 0:
+            _, cider_scores = CiderD_scorer.compute_score(gts_, res_)
+            # _, cider_scores = Cider_scorer.compute_score(gts_, res_)
+        else:
+            cider_scores = 0
+        # default = 0
+        if bleu_reward_weight > 0:
+            _, bleu_scores = Bleu_scorer.compute_score(gts_, res__)
+            bleu_scores = np.array(bleu_scores[3])
+        else:
+            bleu_scores = 0
+
+    print(f"CIDER taking time : {time.time() - start}")
+    scores = cider_reward_weight * cider_scores#+ bleu_reward_weight * bleu_scores
 
     """
     For each img :  Take reward for policy cap. Rescale it using reward for greedy cap.
@@ -169,7 +217,6 @@ def get_self_critical_reward(greedy_res, data_gts, gen_result,config, tokenizer)
     scores (2,5) =      (2,5) -           (2,1)
     greedy cap broadcasted and subtracted from each policy cap
     """
-    np.set_printoptions(precision=3, suppress=True)
     scores = scores[:gen_result_size].reshape(batch_size, seq_per_img) - scores[-batch_size:][:, np.newaxis]
     
     # flatten the scaled reward for all policy cap.   

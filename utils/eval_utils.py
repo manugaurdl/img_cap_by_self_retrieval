@@ -82,6 +82,7 @@ def validation(model, val_dataloader,val_dataset, device, config):
     cocoid2pred = {}
 
     for idx, (prefix, targets, mask, untokenized_cap, meta_data) in tqdm(enumerate(val_dataloader), total=len(val_dataloader)):
+
         # step_time_start = time.time()
 
         if idx ==0 and eval_sample_n > 1:
@@ -135,8 +136,6 @@ def validation(model, val_dataloader,val_dataset, device, config):
             data[meta_data[i].item()] = [caption]
         
         cocoid2pred.update(data)    
-        if idx < 3: 
-            print(cocoid2pred)
 
         # predictions --> [{'image_id': 184613, 'caption': 'a swimmer ravine fee...iers backs', 'perplexity': 8.26982307434082, 'entropy': 8.715027809143066}]
 
@@ -186,7 +185,6 @@ def validation(model, val_dataloader,val_dataset, device, config):
     if lang_eval == 1:
         # lang_stats = language_eval(dataset, predictions, method, 'val')
         lang_stats = compute_nlg_metrics(predictions,gold_standard)
-        import ipdb;ipdb.set_trace()
     return loss_meter, lang_stats
 
 #--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
