@@ -1,8 +1,8 @@
 #dynamic variables
 logging : False
-jatayu : True
+jatayu : False
 lazy_load : False
-batch_size : 16
+batch_size : 4
 mle_bsz : 32
 train_method : "scst" # ['mle', 'scst']
 init_val : True

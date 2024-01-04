@@ -28,7 +28,7 @@ from utils.train_algos import LMCriterion, SCST
 from utils.rewards import init_scorer
 from models.clipcap_og import *
 
-TRAIN = True
+TRAIN = False
 TEST = False
 torch.manual_seed(0)
 random.seed(0)

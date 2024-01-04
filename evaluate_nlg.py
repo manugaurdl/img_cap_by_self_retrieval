@@ -1,5 +1,5 @@
 from argparse import ArgumentParser
-
+import time
 from pprint import pprint
 from pycocoevalcap.eval import Bleu, Cider, Meteor, PTBTokenizer, Rouge, Spice
 
@@ -27,11 +27,11 @@ def compute_nlg_metrics(predictions, gold_standard):
     ground_truth = tokenizer.tokenize(gold_standard)
 
     scorers = [
-        (Bleu(4), ["Bleu_1", "Bleu_2", "Bleu_3", "Bleu_4"]),
-        (Meteor(), "METEOR"),
-        (Rouge(), "ROUGE_L"),
-        (Cider(), "CIDEr"),
-        (Spice(), "SPICE"),
+        # (Bleu(4), ["Bleu_1", "Bleu_2", "Bleu_3", "Bleu_4"]),
+        # (Meteor(), "METEOR"),
+        # (Rouge(), "ROUGE_L"),
+        (Cider(), "CIDEr")
+        # (Spice(), "SPICE"),
     ]
 
     summary = {}
@@ -61,10 +61,13 @@ def run_evaluation():
 
     predictions = read_plaintext_file(args.prediction_file)
     gold_standard = read_plaintext_file(args.gold_file)
-    import ipdb;ipdb.set_trace()
+    # p_ = {k: v for k, v in predictions.items() if k < 17}
+    # g_ = {k: v for k, v in gold_standard.items() if k < 17}
 
+    start = time.time()
     compute_nlg_metrics(predictions=predictions, gold_standard=gold_standard)
-
+    # compute_nlg_metrics(p_, g_)
+    print(f"Time elapsed : {time.time() - start}")
 
 if __name__ == "__main__":
     run_evaluation()

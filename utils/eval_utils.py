@@ -13,10 +13,15 @@ import pickle
 from tqdm import tqdm 
 from utils.helper_functions import *
 # load coco-caption if available
-sys.path.append("coco-caption")
-from pycocotools.coco import COCO
-from pycocoevalcap.eval import COCOEvalCap
 
+# sys.path.append("coco-caption")
+# from pycocotools.coco import COCO
+# from pycocoevalcap.eval import COCOEvalCap
+
+from argparse import ArgumentParser
+
+from pprint import pprint
+from pycocoevalcap.eval import Bleu, Cider, Meteor, PTBTokenizer, Rouge, Spice
 
 bad_endings = ['a','an','the','in','for','at','of','with','before','after','on','upon','near','to','is','are','am']
 bad_endings += ['the']
@@ -70,7 +75,7 @@ def validation(model, val_dataloader,val_dataset, device, config):
     # val_targets = []
     
     model.eval()
-    predictions = []
+    # predictions = []
     # for idx, (prefix, targets, mask) in tqdm(enumerate(val_dataloader), total=len(val_dataloader)):
     
     step_time_avg = []
@@ -125,37 +130,92 @@ def validation(model, val_dataloader,val_dataset, device, config):
         sents = tokenizer.batch_decode(tokens)
         sents = [[sent.split("!")[0]] for sent in sents]
         data = {}
+        
         for i, caption in enumerate(sents):
-            data[meta_data[i]] = [caption]
+            data[meta_data[i].item()] = [caption]
+        
         cocoid2pred.update(data)    
         if idx < 3: 
             print(cocoid2pred)
 
         # predictions --> [{'image_id': 184613, 'caption': 'a swimmer ravine fee...iers backs', 'perplexity': 8.26982307434082, 'entropy': 8.715027809143066}]
-        for k, sent in enumerate(sents): # sents is a list of batch_size length.
-            # entry = {'image_id': data['infos'][k]['id'], 'caption': sent, 'perplexity': perplexity[k].item(), 'entropy': entropy[k].item()}
-            entry = {'image_id' : meta_data[k].item(), 'caption': sent, 'perplexity': perplexity[k].item(), 'entropy': entropy[k].item()}
 
-            predictions.append(entry)
+        # for k, sent in enumerate(sents): # sents is a list of batch_size length.
+        #     # entry = {'image_id': data['infos'][k]['id'], 'caption': sent, 'perplexity': perplexity[k].item(), 'entropy': entropy[k].item()}
+        #     entry = {'image_id' : meta_data[k].item(), 'caption': sent, 'perplexity': perplexity[k].item(), 'entropy': entropy[k].item()}
+
+        #     predictions.append(entry)
 
         # if sample_n > 1:
         #     eval_split_n(model, n_predictions, [fc_feats, att_feats, att_masks, data], eval_kwargs)
-    with open("/ssd_scratch/cvit/manu/val_preds_temp.pkl", "wb") as f:
-        pickle.dump(cocoid2pred, f)
-    print("TEMP PRED DICT SAVED. CAN DO EVAL NOW!")
 
+    # with open("/ssd_scratch/cvit/manu/val_preds_temp.pkl", "wb") as f:
+    #     pickle.dump(cocoid2pred, f)
+
+    idx2cocoid = {idx : cocoid for idx, cocoid in enumerate(cocoid2pred.keys())}
+    
+    path = os.path.join(config['data_dir'], "data/cocoid2caption.pkl")
+
+    with open(path, "rb") as f:
+        all_gts = pickle.load(f)
+    
+    val_cocoids = cocoid2pred.keys()
+    
+    val_gt = {}
+    for cocoid, captions in all_gts.items():
+        if cocoid in val_cocoids:
+            val_gt[cocoid] = captions
+    
+    gold_standard = {}
+
+    for i in range(len(cocoid2pred)):
+        gold_standard[i] = [{"caption" : c} for c in val_gt[idx2cocoid[i]]]
+    
+    predictions = {}
+    for i in range(len(cocoid2pred)):
+        predictions[i] = [{"caption" : cocoid2pred[idx2cocoid[i]][0][0]}]
+        
+    
     lang_stats = None
+    
 
     # if not os.path.isdir('eval_results'):
     #     os.mkdir('eval_results')
     # torch.save((predictions, n_predictions), os.path.join('eval_results/', '.saved_pred_'+ eval_kwargs['id'] + '_' + split + '.pth'))
     
     if lang_eval == 1:
-        lang_stats = language_eval(dataset, predictions, method, 'val')
-        
+        # lang_stats = language_eval(dataset, predictions, method, 'val')
+        lang_stats = compute_nlg_metrics(predictions,gold_standard)
+        import ipdb;ipdb.set_trace()
     return loss_meter, lang_stats
 
 #--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+def compute_nlg_metrics(predictions, gold_standard):
+    tokenizer = PTBTokenizer()
+    predictions = tokenizer.tokenize(predictions)
+    ground_truth = tokenizer.tokenize(gold_standard)
+
+    scorers = [
+        (Bleu(4), ["Bleu_1", "Bleu_2", "Bleu_3", "Bleu_4"]),
+        (Meteor(), "METEOR"),
+        (Rouge(), "ROUGE_L"),
+        (Cider(), "CIDEr"),
+        (Spice(), "SPICE"),
+    ]
+
+    summary = {}
+    for scorer, method in scorers:
+        score, scores = scorer.compute_score(ground_truth, predictions)
+        if isinstance(method, list):
+            for sc, scs, m in zip(score, scores, method):
+                summary[m] = sc
+        else:
+            summary[method] = score
+    print()
+    pprint(summary)
+    return summary
 
 
 def language_eval(dataset, preds, method, split):
