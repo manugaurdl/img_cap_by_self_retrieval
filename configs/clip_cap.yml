@@ -32,7 +32,7 @@ log_train_metrics : False
 save_last_epoch : False
 save_best_metric : True
 save_every_epoch : True
-save_every_n_iter : True
+save_every_n_iter : False
 freeze_gpt : True
  
 # wandb related variables
@@ -42,7 +42,7 @@ wandb :
   sweep_run_count : 100
   entity : "manugaur"
   project : "img_cap_self_retrieval"
-  run_name : "clip_gpt_finetune_scst_cider_fixed"
+  run_name : "clip_gpt_frozen_scst_cider_t_1e-1"
 
 #Sampling 
 method : "clip_cap"
@@ -66,7 +66,7 @@ use_beam_search: False
 entry_count : 1
 max_length : 67  # maximum number of words
 top_p : 0.8
-temp : 0.01
+temp : 0.1
 stop_token : '.'
 lang_eval : 1
 # Specific experiments (default = False)

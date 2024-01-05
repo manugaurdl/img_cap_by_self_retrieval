@@ -286,9 +286,11 @@ def sample(max_length, token_emb, model, temp, method, stop_token, tokenizer, co
 
     returns : preds (last token logit at every time step.)
     """
+    
     max_len = round(float(max_length))
     if method == "greedy":
         sample_n = 1
+        temp = 1.0
     
     pred_logits = []        
     # for sample_n > 1 : repeat images --> batch size increase sample_n X times 
@@ -307,7 +309,6 @@ def sample(max_length, token_emb, model, temp, method, stop_token, tokenizer, co
             break
         outputs = model.gpt(inputs_embeds= token_emb)
 
-        
         #LM head output --> distribution over vocab
         logits = outputs.logits # (B, prefix_len, vocab_size)    
         # logit of last token = next token prediction
@@ -320,10 +321,10 @@ def sample(max_length, token_emb, model, temp, method, stop_token, tokenizer, co
 
         elif method == "sample":
             # probs = torch.nn.functional.softmax(logits.data, dim=-1) # (B, vocab_size)
-            logprobs = torch.nn.functional.log_softmax(logits.data, dim=-1) # (B, vocab_size)
+            logprobs = torch.nn.functional.log_softmax(logits, dim=-1) # (B, vocab_size)
             # next_token = torch.multinomial(logprobs, num_samples=1).squeeze(-1) # (B, 1)
             next_token = torch.distributions.Categorical(logits=logprobs.detach()).sample()
-            sampled_logprob = logits.gather(1, next_token.clone().unsqueeze(-1)).squeeze(-1)
+            sampled_logprob = logprobs.gather(1, next_token.clone().unsqueeze(-1)).squeeze(-1)
 
             #************************************************************************
 

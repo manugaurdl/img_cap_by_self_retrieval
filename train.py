@@ -32,7 +32,7 @@ TRAIN = True
 TEST = False
 torch.manual_seed(0)
 random.seed(0)
-# torch.autograd.set_detect_anomaly(True)
+torch.autograd.set_detect_anomaly(True)
 
 def train(model, config):
 
