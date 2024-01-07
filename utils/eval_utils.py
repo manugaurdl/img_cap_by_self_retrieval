@@ -317,7 +317,11 @@ def sample(max_length, token_emb, model, temp, method, stop_token, tokenizer, co
         pred_logits.append(logits.unsqueeze(1)) #(B,1,vocab_size)
 
         if method == "greedy":
-            sampled_logprob, next_token = torch.max(logits.data,dim = -1)        
+            sampled_logprob, next_token = torch.max(logits.data,dim = -1)
+            #torch.argmax(log_softmax) != torch.argmax(x) if values of x very close        
+            # logprobs = torch.nn.functional.log_softmax(logits, dim=-1) # (B, vocab_size)
+            # sampled_logprob, next_token = torch.max(logprobs,dim = -1)
+
 
         elif method == "sample":
             # probs = torch.nn.functional.softmax(logits.data, dim=-1) # (B, vocab_size)
