@@ -20,33 +20,52 @@ class CocoDataset(Dataset):
               Mask is of length 50 however. As it has torch.ones(1,10) prepended to captions mask for image prefix embedding. 
     """
     
-    def __init__(self, data_path, prefix_len,norm_prefix, split, tokenizer, lazy_load):
+    def __init__(self, split,config):
 
         """
         data_path : {model}_{split}_emb.pkl , cocoid2caption.pkl
         indexed_dataset_path : {split}_caption_tokens
         """
-        self.lazy_load = lazy_load
+        self.split = split
+        self.llama_cap = config['llama_cap']
+        data_path = config[f"{split}_data"]
+
+        if self.llama_cap:
+            data_path = data_path.split(".pkl")[0] + "_llama.pkl"
+            self.id2cap = open_pickle(os.path.join(data_path.split('ViT')[0],"cocoid2caption_llama_preproc.pkl"))
+            self.indexed_dataset_path = os.path.join(data_path.split('ViT')[0],f'llama_{self.split}_caption_tokens.pkl')    
+            id2token_file = f'llama_cocoid2tokenidx_{self.split}.pkl'
+            self.max_len_token = 67  #based on train set
+
+        else:
+            self.id2cap = open_pickle(os.path.join(data_path.split('ViT')[0],"cocoid2caption.pkl"))
+            self.indexed_dataset_path = os.path.join(data_path.split('ViT')[0],f'{self.split}_caption_tokens.pkl')
+            id2token_file = f'cocoid2tokenidx_{self.split}.pkl'
+            self.max_len_token = 40  #based on train set
+        
+        if split == "train":
+            self.lazy_load = config['lazy_load']
+        else:
+            self.lazy_load = False
+
         self.data = open_pickle(data_path)
         self.clip_embed = self.data['clip_embedding']
         self.images = self.data['images']  # list of instances (images) for given split. Each is a dict of {cocoid, clip_idx}
-        self.tokenizer = GPT2Tokenizer.from_pretrained(tokenizer)
-        self.prefix_len = prefix_len
-        self.norm_prefix = norm_prefix
-        self.split = split
-        self.max_len_token = 40  #based on train set
-        self.id2cap = open_pickle(os.path.join(data_path.split('ViT')[0],"cocoid2caption.pkl"))
+        self.tokenizer = GPT2Tokenizer.from_pretrained(config['tokenizer'])
+        self.prefix_len = config['prefix_length']
+        self.norm_prefix = config['normalize_prefix']
 
         # cannot tokenize everytime. Too expensive.
-        self.indexed_dataset_path = os.path.join(data_path.split('ViT')[0],f'{self.split}_caption_tokens.pkl')
-        
+       
+
+
         if os.path.isfile(self.indexed_dataset_path):
             print(f"loading {self.split} data.... ")
             
             if not self.lazy_load:
-                self.tokenized_captions, _ = open_pickle(self.indexed_dataset_path) # max_len used from train set.
-            
-            self.cocoid2tokenidx = open_pickle(os.path.join(data_path.split('ViT')[0],f'cocoid2tokenidx_{self.split}.pkl'))
+                self.tokenized_captions, _ = open_pickle(self.indexed_dataset_path) # max_len used from train set
+
+            self.cocoid2tokenidx = open_pickle(os.path.join(data_path.split('ViT')[0],id2token_file))
         else:
             #using a given idx, we can access the clip embedding and its corresponding tokenized caption 
             print(f"tokenizing {self.split} captions")
@@ -59,29 +78,29 @@ class CocoDataset(Dataset):
             token_len_list = []
             self.cocoid2tokenidx = {}  #  cocoid --> idx for self.tokenized_captions
 
-            for idx, image in enumerate(self.images): 
+            for idx, image in tqdm(enumerate(self.images), total = len(self.images)): 
                 
                 cocoid = image['cocoid']
                 caption = self.id2cap[cocoid]
 
                 #caption : list of 5 cap for given cocoid
-                tokens = [torch.tensor(self.tokenizer.encode(cap),dtype=torch.int) for cap in caption]
+                if isinstance(caption, Tuple) or isinstance(caption, list):
+                    tokens = [torch.tensor(self.tokenizer.encode(cap),dtype=torch.int) for cap in caption]
+                    token_len_list.extend([token.shape[-1] for token in tokens]) # store list of lengths of all tokens.
                 
-                self.tokenized_captions.append(tokens)
-                
-                token_len_list.extend([token.shape[-1] for token in tokens]) # sotre list of lengths of all tokens.
-
+                self.tokenized_captions.append(tokens) #normal : list of lists of tensors  | llama : list of tensors
                 self.cocoid2tokenidx[cocoid] = idx
 
             all_len = torch.tensor(token_len_list, dtype = torch.float)
             #max = 182
             self.max_len_token = min(all_len.mean() + 10*(all_len.std()), all_len.max())
             
-            dump_pickle(self.cocoid2tokenidx,os.path.join(data_path.split('ViT')[0],f'cocoid2tokenidx_{self.split}.pkl'))
+            dump_pickle(self.cocoid2tokenidx,os.path.join(data_path.split('ViT')[0],id2token_file))
             dump_pickle((self.tokenized_captions, self.max_len_token), self.indexed_dataset_path)
 
     def __len__(self):
-        return len(self.data['clip_embedding'])
+        # return len(self.data['clip_embedding']) 
+        return len(self.images)  # images removes 590 cocoids when using llama
         
     def pad(self, idx, cap_idx, tokens):
                      

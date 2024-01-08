@@ -92,7 +92,7 @@ def train(model, config):
     # Dataloaders
     
     if TRAIN:
-        train_dataset = CocoDataset(config['train_data'], config['prefix_length'],config['normalize_prefix'], 'train', config['tokenizer'], config['lazy_load'])
+        train_dataset = CocoDataset('train',config)
         train_dataloader = DataLoader(train_dataset, batch_size=train_bsz, shuffle=True, drop_last=True)
         
         if config['train_method']=="mle":
@@ -103,10 +103,10 @@ def train(model, config):
         #         optimizer, num_warmup_steps=0, num_training_steps=epochs* len(train_dataloader))
   
 
-    val_dataset = CocoDataset(config['val_data'], config['prefix_length'],config['normalize_prefix'],'val', config['tokenizer'],False)
+    val_dataset = CocoDataset("val",config)
     val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
 
-    test_dataset = CocoDataset(config['test_data'], config['prefix_length'],config['normalize_prefix'],'test', config['tokenizer'], False)
+    test_dataset = CocoDataset("test",config)
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
     tokenizer = val_dataset.tokenizer
     prefix_len = val_dataset.prefix_len
@@ -157,8 +157,8 @@ def train(model, config):
             
             targets, mask, prefix = targets.to(device), mask.to(device), prefix.to(device, dtype=torch.float32) # (B,41), (B,51), (B,1024/512)
             if config['train_method'] == 'mle':
-                
-                prefix = repeat_tensors(targets.shape[0]//prefix.shape[0],prefix)
+                if not config["llama_cap"]:
+                    prefix = repeat_tensors(targets.shape[0]//prefix.shape[0],prefix)
  
                 loss, preds, entropy, perplexity = LMCriterion(model, prefix, targets, mask, meta_data, prefix_len)
                 
@@ -191,9 +191,10 @@ def train(model, config):
             train_log = {"epoch": epoch+1,
             "train_loss_avg": loss_meter.avg,
             "avg_reward" : reward_meter.avg,
-            "reward" : reward.item(),
             "lr": optimizer.state_dict()["param_groups"][0]["lr"],
             }
+            if config['train_method'] == "scst":
+                train_log["reward"] : reward.item()
             
             print(train_log)
             # step_time_avg.append(time.time() - step_time_start)

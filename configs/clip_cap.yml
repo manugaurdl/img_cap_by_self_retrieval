@@ -1,12 +1,13 @@
 #dynamic variables
 logging : True
 jatayu : True
-lazy_load : False
+lazy_load : False 
 batch_size : 16
-mle_bsz : 32
-train_method : "scst" # ['mle', 'scst']
+mle_bsz : 80
+train_method : "mle" # ['mle', 'scst']
 init_val : True
 old_cider : False
+llama_cap : True
 # Hyperparams
 lr : 2e-5
 optimizer: "AdamW"
@@ -31,7 +32,7 @@ log_train_metrics : False
 #Boolean variables
 save_last_epoch : False
 save_best_metric : True
-save_every_epoch : True
+save_every_epoch : False
 save_every_n_iter : False
 freeze_gpt : True
  
@@ -42,7 +43,7 @@ wandb :
   sweep_run_count : 100
   entity : "manugaur"
   project : "img_cap_self_retrieval"
-  run_name : "clip_gpt_frozen_scst_cider_t_1"
+  run_name : "clip_mlp_transformer_llama"
 
 #Sampling 
 method : "clip_cap"
@@ -53,7 +54,7 @@ eval_sample_n : 1
 train_data : 'data/ViT-B_32_train_emb.pkl'
 val_data : 'data/ViT-B_32_val_emb.pkl'
 test_data : 'data/ViT-B_32_test_emb.pkl'
-out_dir : 'checkpoints/frozen_gpt_scst'
+out_dir : 'checkpoints/clip_ViT-B_32'
 # in case of Test or scst training
 load_model_from : 'checkpoints/clip_ViT-B_32'
 cocotalk : 'data/cocotalk.json'
