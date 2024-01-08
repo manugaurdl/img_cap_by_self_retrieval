@@ -1,11 +1,11 @@
 #dynamic variables
 logging : True
+init_val : True
 jatayu : True
 lazy_load : False 
 batch_size : 16
-mle_bsz : 80
+mle_bsz : 32
 train_method : "mle" # ['mle', 'scst']
-init_val : True
 old_cider : False
 llama_cap : True
 # Hyperparams
@@ -43,7 +43,7 @@ wandb :
   sweep_run_count : 100
   entity : "manugaur"
   project : "img_cap_self_retrieval"
-  run_name : "clip_mlp_transformer_llama"
+  run_name : "clip_mle_transformer_llama"
 
 #Sampling 
 method : "clip_cap"

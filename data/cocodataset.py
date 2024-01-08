@@ -20,7 +20,7 @@ class CocoDataset(Dataset):
               Mask is of length 50 however. As it has torch.ones(1,10) prepended to captions mask for image prefix embedding. 
     """
     
-    def __init__(self, split,config):
+    def __init__(self, split, config):
 
         """
         data_path : {model}_{split}_emb.pkl , cocoid2caption.pkl
@@ -30,10 +30,10 @@ class CocoDataset(Dataset):
         self.llama_cap = config['llama_cap']
         data_path = config[f"{split}_data"]
 
-        if self.llama_cap:
-            data_path = data_path.split(".pkl")[0] + "_llama.pkl"
+        if self.split =="train" and self.llama_cap:
+            data_path = data_path.split(".pkl")[0] + "_llama.pkl" #ViT-B_32_train_emb_llama.pkl'
             self.id2cap = open_pickle(os.path.join(data_path.split('ViT')[0],"cocoid2caption_llama_preproc.pkl"))
-            self.indexed_dataset_path = os.path.join(data_path.split('ViT')[0],f'llama_{self.split}_caption_tokens.pkl')    
+            self.indexed_dataset_path = os.path.join(data_path.split('ViT')[0],f'llama_{self.split}_caption_tokens.pkl')  #llama_train_caption_tokens
             id2token_file = f'llama_cocoid2tokenidx_{self.split}.pkl'
             self.max_len_token = 67  #based on train set
 
@@ -56,8 +56,6 @@ class CocoDataset(Dataset):
         self.norm_prefix = config['normalize_prefix']
 
         # cannot tokenize everytime. Too expensive.
-       
-
 
         if os.path.isfile(self.indexed_dataset_path):
             print(f"loading {self.split} data.... ")

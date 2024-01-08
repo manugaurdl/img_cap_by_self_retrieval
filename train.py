@@ -59,9 +59,9 @@ def train(model, config):
 
     else:        
         #clip_mle_frozen_gpt_best_cider
-        load_model(model, load_model_from,f'clip_mle_frozen_gpt_best_cider')
+        load_model(model, load_model_from,f'clip_mle_transformer_llama_best_cider')
         optimizer = AdamW(model.parameters(), lr=float(scst_lr))
-        optim_path = os.path.join(load_model_from, 'clip_mle_frozen_gpt_best_cider.pt')
+        # optim_path = os.path.join(load_model_from, 'clip_mle_frozen_gpt_best_cider.pt')
         # optimizer.load_state_dict(torch.load(optim_path)['optimizer_state_dict'])
         # import ipdb;ipdb.set_trace()
 
