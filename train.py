@@ -146,6 +146,7 @@ def train(model, config):
 
         predictions = [] # coco
         step_time_avg = []
+        sample_step_time_avg = []
 
         for idx, (prefix, targets, mask, untokenized_cap, meta_data) in tqdm(enumerate(train_dataloader), total=len(train_dataloader)):
             # if idx == 100:
@@ -177,9 +178,9 @@ def train(model, config):
                     epoch_train_decoded_cap.extend(decoded_cap)
 
             else:
-                start = time.time()
-                reward, loss = SCST(model, prefix, targets, mask, max_length, stop_token,tokenizer, config)
-                step_time_avg.append(time.time() - start)
+                # start = time.time()
+                reward, loss = SCST(model, prefix, targets, mask, max_length, stop_token,tokenizer, config, step_time_avg, sample_step_time_avg)
+                # step_time_avg.append(time.time() - start)
             # accumulating loss
             # epoch_train_losses.append(loss.item())
             loss_meter.update(loss.item(), targets.shape[0])
@@ -201,7 +202,7 @@ def train(model, config):
             
             print(train_log)
             # step_time_avg.append(time.time() - step_time_start)
-            print(f"time avg : {np.mean(np.array(step_time_avg))}")
+            # print(f"time avg : {np.mean(np.array(step_time_avg))}")
 
             if config['logging']:
                 wandb.log(train_log, step = step)

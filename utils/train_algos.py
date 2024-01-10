@@ -7,7 +7,7 @@ from utils.eval_utils import *
 from utils.losses import * 
 
 
-def SCST(model,prefix, targets, mask,max_length, stop_token, tokenizer, config):
+def SCST(model,prefix, targets, mask,max_length, stop_token, tokenizer, config, step_time_avg, sample_step_time_avg):
     
     model.eval()
     with torch.no_grad():
@@ -20,7 +20,7 @@ def SCST(model,prefix, targets, mask,max_length, stop_token, tokenizer, config):
         # _, policy_seqLogprob, policy_cap = sample(max_length, prefix_embed, model, config['temp'], "greedy", stop_token,tokenizer, config)
         # step_time_avg.append(time.time() - T1)
         # print(len(step_time_avg))
-        # print(f"bsz {config['batch_size']} sample_n {config['train_sample_n']} : {np.mean(np.array(step_time_avg))}")
+        # print(f"GREEDY TIME : {np.mean(np.array(step_time_avg))}")
 
     #currently overriding train() method
 
@@ -28,11 +28,11 @@ def SCST(model,prefix, targets, mask,max_length, stop_token, tokenizer, config):
     prefix_embed = model(prefix, targets, mask, only_prefix = True)
 
     #trainable policy 
-    # T1 = time.time()
+    # T2 = time.time()
     _, policy_seqLogprob, policy_cap = sample(max_length, prefix_embed, model, config['temp'], "sample", stop_token, tokenizer,config, sample_n = config['train_sample_n'])  # don't need logits (dist over all words). Have log prob for sampled word
-    # step_time_avg.append(time.time() - T1)
+    # sample_step_time_avg.append(time.time() - T2)
     # print(len(step_time_avg))
-    # print(f"sample_n {config['train_sample_n']} : {np.mean(np.array(step_time_avg))}")
+    # print(f"SAMPLE TIME : {np.mean(np.array(sample_step_time_avg))}")
 
     # len(gts) = bsz.
     # For each instance in batch --> 5 target cap.
