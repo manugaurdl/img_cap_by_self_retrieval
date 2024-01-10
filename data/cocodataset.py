@@ -30,12 +30,17 @@ class CocoDataset(Dataset):
         self.llama_cap = config['llama_cap']
         data_path = config[f"{split}_data"]
 
-        if self.split =="train" and self.llama_cap:
-            data_path = data_path.split(".pkl")[0] + "_llama.pkl" #ViT-B_32_train_emb_llama.pkl'
-            self.id2cap = open_pickle(os.path.join(data_path.split('ViT')[0],"cocoid2caption_llama_preproc.pkl"))
-            self.indexed_dataset_path = os.path.join(data_path.split('ViT')[0],f'llama_{self.split}_caption_tokens.pkl')  #llama_train_caption_tokens
-            id2token_file = f'llama_cocoid2tokenidx_{self.split}.pkl'
-            self.max_len_token = 67  #based on train set
+        #*************** CHANGE THIS
+        # if self.split =="train" and self.llama_cap:
+        if self.llama_cap:
+            suffix = config['suffix']
+            print(f"Training on {suffix} captions")
+            data_path = data_path.split(".pkl")[0] + f"_{suffix}.pkl" #ViT-B_32_train_emb_llama.pkl
+            self.id2cap = open_pickle(os.path.join(data_path.split('ViT')[0],'cocoid2caption_llama_1k_removed_1_eos.pkl'))
+            # self.id2cap = open_pickle(os.path.join(data_path.split('ViT')[0],"cocoid2caption_llama_preproc.pkl")) # used for tokenization. dict : no indexing headaches
+            self.indexed_dataset_path = os.path.join(data_path.split('ViT')[0],f'{suffix}_{self.split}_caption_tokens.pkl')  #llama_train_caption_tokens
+            id2token_file = f'{suffix}_cocoid2tokenidx_{self.split}.pkl'
+            self.max_len_token = 40 #67  #based on train set
 
         else:
             self.id2cap = open_pickle(os.path.join(data_path.split('ViT')[0],"cocoid2caption.pkl"))
@@ -134,6 +139,7 @@ class CocoDataset(Dataset):
             with open(f"/ssd_scratch/cvit/manu/img_cap_self_retrieval_clip/data/lazy_load_train/{token_idx}.pkl", "rb") as f:
                 unpadded_tokens = pickle.load(f)[:5]
         else:
+            # unpadded_tokens = [self.tokenized_captions[token_idx][3]]
             unpadded_tokens = self.tokenized_captions[token_idx][:5]
 
         padded_tokens, mask =  zip(*[self.pad(token_idx, cap_idx, tokens) for cap_idx, tokens in enumerate(unpadded_tokens)])   # list of 5 tokenized captions

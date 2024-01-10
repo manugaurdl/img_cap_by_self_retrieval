@@ -5,13 +5,17 @@ jatayu : True
 lazy_load : False 
 batch_size : 16
 mle_bsz : 32
-train_method : "mle" # ['mle', 'scst']
+train_method : "scst" # ['mle', 'scst']
 old_cider : False
+
+#llama
 llama_cap : True
+suffix : "llama_1k_removed" #["llama", "llama_1k_removed"]
+
 # Hyperparams
 lr : 2e-5
 optimizer: "AdamW"
-num_epochs: 10
+num_epochs: 20
 prefix_length : 10
 prefix_dim : 512
 num_layers : 8
@@ -30,12 +34,13 @@ use_scheduler : False
 log_train_metrics : False
 
 #Boolean variables
-save_last_epoch : False
+save_last_epoch : True
 save_best_metric : True
 save_every_epoch : False
 save_every_n_iter : False
-freeze_gpt : True
- 
+freeze_gpt : False
+save_val_preds : False
+
 # wandb related variables
 wandb : 
   sweep : False
@@ -43,7 +48,7 @@ wandb :
   sweep_run_count : 100
   entity : "manugaur"
   project : "img_cap_self_retrieval"
-  run_name : "clip_mle_transformer_llama"
+  run_name : "clip_scst_mlp_llama_1k_removed_1_eos_llama_val_set"
 
 #Sampling 
 method : "clip_cap"
@@ -65,7 +70,7 @@ tokenizer : "gpt2"
 normalize_prefix : False 
 use_beam_search: False
 entry_count : 1
-max_length : 67  # maximum number of words
+max_length : 40  # maximum number of words
 top_p : 0.8
 temp : 1.0
 stop_token : '.'

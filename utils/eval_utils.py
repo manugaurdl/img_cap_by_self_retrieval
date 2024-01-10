@@ -177,6 +177,20 @@ def validation(model, val_dataloader,val_dataset, device, config):
     
     lang_stats = None
     
+    if config['save_val_preds']:
+        gold_standard = {}
+
+        for i in range(len(cocoid2pred)):
+            gold_standard[idx2cocoid[i]] = [{"caption" : c} for c in val_gt[idx2cocoid[i]]]
+        
+        predictions = {}
+        for i in range(len(cocoid2pred)):
+            predictions[idx2cocoid[i]] = [{"caption" : cocoid2pred[idx2cocoid[i]][0][0]}]
+            
+        dump_pickle(predictions, f"/home/manugaur/img_cap_self_retrieval/data/val_preds/{config['wandb']['run_name']}.pkl" )
+        # dump_pickle(gold_standard, f"/home/manugaur/img_cap_self_retrieval/data/val_preds/gold_standard.pkl" )
+        # dump_pickle(idx2cocoid, f"/home/manugaur/img_cap_self_retrieval/data/val_preds/idx2cocoid.pkl" )
+
 
     # if not os.path.isdir('eval_results'):
     #     os.mkdir('eval_results')

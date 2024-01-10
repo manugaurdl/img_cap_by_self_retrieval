@@ -66,7 +66,7 @@ def open_pickle(path):
         data = pickle.load(f)
     return data
 
-def dump_pickle(data,path):
+def dump_pickle(data, path):
     with open(path, 'wb') as f:
         pickle.dump(data,f)
 

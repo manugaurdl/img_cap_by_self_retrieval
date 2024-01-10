@@ -58,8 +58,10 @@ def train(model, config):
         optimizer = AdamW(model.parameters(), lr=float(config['lr']))
 
     else:        
-        #clip_mle_frozen_gpt_best_cider
-        load_model(model, load_model_from,f'clip_mle_transformer_llama_best_cider')
+        
+        # clip_mle_transformer_llama_best_cider
+        # clip_mle_frozen_gpt_best_cider
+        load_model(model, load_model_from,f'clip_mle_mlp_llama_1k_removed_1_eos_llama_val_set_best_cider')
         optimizer = AdamW(model.parameters(), lr=float(scst_lr))
         # optim_path = os.path.join(load_model_from, 'clip_mle_frozen_gpt_best_cider.pt')
         # optimizer.load_state_dict(torch.load(optim_path)['optimizer_state_dict'])
@@ -105,9 +107,9 @@ def train(model, config):
 
     val_dataset = CocoDataset("val",config)
     val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
-
-    test_dataset = CocoDataset("test",config)
-    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+    if TEST:
+        test_dataset = CocoDataset("test",config)
+        test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
     tokenizer = val_dataset.tokenizer
     prefix_len = val_dataset.prefix_len
     max_length = val_dataset.max_len_token
@@ -157,7 +159,7 @@ def train(model, config):
             
             targets, mask, prefix = targets.to(device), mask.to(device), prefix.to(device, dtype=torch.float32) # (B,41), (B,51), (B,1024/512)
             if config['train_method'] == 'mle':
-                if not config["llama_cap"]:
+                if not config["llama_cap"] and targets.shape[0]//prefix.shape[0] > 1:
                     prefix = repeat_tensors(targets.shape[0]//prefix.shape[0],prefix)
  
                 loss, preds, entropy, perplexity = LMCriterion(model, prefix, targets, mask, meta_data, prefix_len)
