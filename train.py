@@ -177,8 +177,9 @@ def train(model, config):
                     epoch_train_decoded_cap.extend(decoded_cap)
 
             else:
+                start = time.time()
                 reward, loss = SCST(model, prefix, targets, mask, max_length, stop_token,tokenizer, config)
-            
+                step_time_avg.append(time.time() - start)
             # accumulating loss
             # epoch_train_losses.append(loss.item())
             loss_meter.update(loss.item(), targets.shape[0])
@@ -200,7 +201,7 @@ def train(model, config):
             
             print(train_log)
             # step_time_avg.append(time.time() - step_time_start)
-            # print(f"batch {config['batch_size']} sample_n {config['train_sample_n']}  time avg : {np.mean(np.array(step_time_avg))}")
+            print(f"time avg : {np.mean(np.array(step_time_avg))}")
 
             if config['logging']:
                 wandb.log(train_log, step = step)

@@ -1,6 +1,6 @@
 #dynamic variables
-logging : True
-init_val : True
+logging : False
+init_val : False
 jatayu : True
 lazy_load : False 
 batch_size : 16
