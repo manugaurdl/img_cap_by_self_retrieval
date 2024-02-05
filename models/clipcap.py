@@ -58,6 +58,7 @@ class Model(nn.Module):
         self.train_only_ln = train_only_ln
         self.gpt = GPT2LMHeadModel.from_pretrained('gpt2')
         self.gpt_dim = self.gpt.transformer.wte.weight.shape[1]     #token embedding weight.shape
+        self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
 
         # cocotalk vocab
         # self.vocab = open_json(cocotalk)['ix_to_word']
@@ -102,3 +103,5 @@ class Model(nn.Module):
         if self.freeze_gpt and not self.train_only_ln:
             self.gpt.eval()
         return self
+
+

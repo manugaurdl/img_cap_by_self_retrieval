@@ -58,10 +58,24 @@ def train(model, config):
         optimizer = AdamW(model.parameters(), lr=float(config['lr']))
 
     else:        
-        
+
+        # *********** replace with a function to load clipcap weights to my model
+        # coco_wt = torch.load("/home/manugaur/coco_weights.pt")
+        # coco_wt["mapping_network.model.0.weight"] = coco_wt["clip_project.model.0.weight"]
+        # coco_wt["mapping_network.model.2.weight"] = coco_wt["clip_project.model.2.weight"]
+        # coco_wt["mapping_network.model.2.bias"] = coco_wt["clip_project.model.2.bias"]
+        # coco_wt["mapping_network.model.0.bias"] = coco_wt["clip_project.model.0.bias"]
+        # del coco_wt["clip_project.model.0.weight"]
+        # del coco_wt["clip_project.model.2.weight"]
+        # del coco_wt["clip_project.model.2.bias"]
+        # del coco_wt["clip_project.model.0.bias"]
+        # model.load_state_dict(coco_wt)
+
+
         # clip_mle_transformer_llama_best_cider
         # clip_mle_frozen_gpt_best_cider
-        load_model(model, load_model_from,f'clip_mle_mlp_llama_1k_removed_1_eos_llama_val_set_best_cider')
+        # clip_mle_transformer_llama_1k_removed_1_eos_llama_val_set_best_cider
+        load_model(model, load_model_from,f'clip_mle_mlp_best_cider')
         optimizer = AdamW(model.parameters(), lr=float(scst_lr))
         # optim_path = os.path.join(load_model_from, 'clip_mle_frozen_gpt_best_cider.pt')
         # optimizer.load_state_dict(torch.load(optim_path)['optimizer_state_dict'])

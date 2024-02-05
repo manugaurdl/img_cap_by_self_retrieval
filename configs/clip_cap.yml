@@ -1,9 +1,9 @@
 #dynamic variables
 logging : False
-init_val : False
+init_val : True
 jatayu : True
 lazy_load : False 
-batch_size : 16
+batch_size : 32
 mle_bsz : 32
 train_method : "scst" # ['mle', 'scst']
 old_cider : False
@@ -26,7 +26,7 @@ warmup_steps : 1000
 cider_reward_weight : 1
 bleu_reward_weight : 0
 cached_tokens : 'coco-train-idxs_gpt'
-scst_lr : 1e-7
+scst_lr : 1e-6
 train_sample_n : 1
 use_scheduler : False
 
@@ -48,12 +48,17 @@ wandb :
   sweep_run_count : 100
   entity : "manugaur"
   project : "img_cap_self_retrieval"
-  run_name : "clip_scst_mlp_llama_1k_removed_1_eos_llama_val_set"
+  run_name : "clip_scst_transformer_llama_train_lr_1e-6"
 
 #Sampling 
 method : "clip_cap"
 sampling_method : "greedy"
 eval_sample_n : 1
+#HF
+hf_sampling : True
+increase_gpt_vocab_by : 5000
+do_sample : False
+max_length : 40
 
 # Path variables
 train_data : 'data/ViT-B_32_train_emb.pkl'
@@ -64,15 +69,13 @@ out_dir : 'checkpoints/clip_ViT-B_32'
 load_model_from : 'checkpoints/clip_ViT-B_32'
 cocotalk : 'data/cocotalk.json'
 #static variables
-
 gpu_id: 0
 tokenizer : "gpt2"
 normalize_prefix : False 
 use_beam_search: False
 entry_count : 1
-max_length : 40  # maximum number of words
 top_p : 0.8
-temp : 1.0
+temp : 0.1
 stop_token : '.'
 lang_eval : 1
 # Specific experiments (default = False)

@@ -31,8 +31,8 @@ class CocoDataset(Dataset):
         data_path = config[f"{split}_data"]
 
         #*************** CHANGE THIS
-        # if self.split =="train" and self.llama_cap:
-        if self.llama_cap:
+        if self.split =="train" and self.llama_cap:
+        # if self.llama_cap:
             suffix = config['suffix']
             print(f"Training on {suffix} captions")
             data_path = data_path.split(".pkl")[0] + f"_{suffix}.pkl" #ViT-B_32_train_emb_llama.pkl

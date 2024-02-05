@@ -12,6 +12,7 @@ import sys
 import pickle
 from tqdm import tqdm 
 from utils.helper_functions import *
+from utils.hf_sample import *
 # load coco-caption if available
 
 # sys.path.append("coco-caption")
@@ -81,6 +82,13 @@ def validation(model, val_dataloader,val_dataset, device, config):
     step_time_avg = []
     cocoid2pred = {}
 
+    if config['hf_sampling']:
+         if not getattr(model.gpt, "_patched", False):
+            maybe_patch_gpt(model, config['increase_gpt_vocab_by'])
+    
+    model.logits_processor = StopTokenLogitsProcessor(model.tokenizer, do_sample= False)
+
+    
     for idx, (prefix, targets, mask, untokenized_cap, meta_data) in tqdm(enumerate(val_dataloader), total=len(val_dataloader)):
 
         # step_time_start = time.time()
@@ -97,10 +105,13 @@ def validation(model, val_dataloader,val_dataset, device, config):
 
         #sample entire caption
         # preds : last token's logit at every time step
-        preds, seqLogprob, tokens  = sample(max_length, prefix_embed, model, temp, sampling_method, stop_token,tokenizer, config, sample_n = eval_sample_n)
-        tokens = tokens.data
-    
-        logits  = torch.cat((preds), dim = 1) # (B, K , vocab_size) ; K --> max_cap_length for the batch of sampled captions
+        if config['hf_sampling']:
+            sents = hf_sample(prefix_embed,model,config)
+        else:
+            preds, seqLogprob, tokens  = sample(max_length, prefix_embed, model, temp, sampling_method, stop_token,tokenizer, config, sample_n = eval_sample_n)
+            tokens = tokens.data
+        
+            logits  = torch.cat((preds), dim = 1) # (B, K , vocab_size) ; K --> max_cap_length for the batch of sampled captions
 
         # if eval_sample_n > 1: 
         #     #currently not using filename, sent_id hence not repeated
@@ -120,21 +131,21 @@ def validation(model, val_dataloader,val_dataset, device, config):
         # loss = F.cross_entropy(logits.reshape(-1, logits.shape[-1]), targets.to(torch.long).flatten(), ignore_index = 0)
         # loss_meter.update(loss.item(), targets.shape[0])
 
-        entropy = -(F.softmax(logits, dim=2) * logits).sum(2).sum(1) / ((tokens>0).to(logits).sum(1)+1)
-        perplexity = - logits.gather(2, tokens.unsqueeze(2).to(torch.int64)).squeeze(2).sum(1) / ((tokens>0).to(logits).sum(1)+1)
+            entropy = -(F.softmax(logits, dim=2) * logits).sum(2).sum(1) / ((tokens>0).to(logits).sum(1)+1)
+            perplexity = - logits.gather(2, tokens.unsqueeze(2).to(torch.int64)).squeeze(2).sum(1) / ((tokens>0).to(logits).sum(1)+1)
 
         # generated captions of each batch added to list --> gen captions for whole split
         # val_preds.append(tokens)
         # val_targets.append(targets)
     
     #--------------------------------------------------------
-        sents = tokenizer.batch_decode(tokens)
-        sents = [[sent.split("!")[0]] for sent in sents]
-        data = {}
+            sents = tokenizer.batch_decode(tokens)
+            sents = [[sent.split("!")[0]] for sent in sents]
         
+        data = {}    
         for i, caption in enumerate(sents):
             data[meta_data[i].item()] = [caption]
-        
+    
         cocoid2pred.update(data)    
 
         # predictions --> [{'image_id': 184613, 'caption': 'a swimmer ravine fee...iers backs', 'perplexity': 8.26982307434082, 'entropy': 8.715027809143066}]
@@ -172,7 +183,10 @@ def validation(model, val_dataloader,val_dataset, device, config):
     
     predictions = {}
     for i in range(len(cocoid2pred)):
-        predictions[i] = [{"caption" : cocoid2pred[idx2cocoid[i]][0][0]}]
+        if config['hf_sampling']:
+            predictions[i] = [{"caption" : cocoid2pred[idx2cocoid[i]][0]}]
+        else:
+            predictions[i] = [{"caption" : cocoid2pred[idx2cocoid[i]][0][0]}]
         
     
     lang_stats = None
@@ -185,7 +199,10 @@ def validation(model, val_dataloader,val_dataset, device, config):
         
         predictions = {}
         for i in range(len(cocoid2pred)):
-            predictions[idx2cocoid[i]] = [{"caption" : cocoid2pred[idx2cocoid[i]][0][0]}]
+            if config['hf_sampling']:
+                predictions[idx2cocoid[i]] = [{"caption" : cocoid2pred[idx2cocoid[i]][0]}]
+            else:
+                predictions[idx2cocoid[i]] = [{"caption" : cocoid2pred[idx2cocoid[i]][0][0]}]
             
         dump_pickle(predictions, f"/home/manugaur/img_cap_self_retrieval/data/val_preds/{config['wandb']['run_name']}.pkl" )
         # dump_pickle(gold_standard, f"/home/manugaur/img_cap_self_retrieval/data/val_preds/gold_standard.pkl" )
