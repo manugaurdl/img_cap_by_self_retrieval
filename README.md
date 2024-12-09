@@ -1,2 +1,2 @@
 # img_cap_by_self_retrieval
-A 2023 implementation of Show, Tell and Discriminate in PyTorch  
+A PyTorch repo for MLE training captioners and fine-tuning them with REINFORCE (CIDEr optim, Self-Retrieval)
